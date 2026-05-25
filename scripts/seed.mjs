@@ -9,6 +9,10 @@ if (!DATABASE_URL) {
 }
 
 const pool = new Pool({ connectionString: DATABASE_URL });
+const SEED_CLIENT_ID = process.env.SEED_CLIENT_ID || "client_influish_demo";
+const SEED_PUBLIC_KEY = process.env.SEED_PUBLIC_KEY || "pk_test_2a8a5f07d4b9fcf1cc77e024";
+const SEED_SECRET_KEY = process.env.SEED_SECRET_KEY || "sk_test_influish_demo";
+const SEED_CLIENT_NAME = process.env.SEED_CLIENT_NAME || "Influish Demo";
 
 function webviewSpec({ templateId, title, subtitle, cta, product, features, socialProof, legal }) {
   const spec = {
@@ -203,12 +207,13 @@ async function main() {
     await client.query("BEGIN");
     const workspace = await client.query(
       `INSERT INTO clients (id, public_key, secret_key, name)
-       VALUES ('client_test_demo', 'pk_test_demo', 'sk_test_demo', 'Test Workspace')
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (public_key) DO UPDATE SET
          secret_key = EXCLUDED.secret_key,
          name = EXCLUDED.name,
          updated_at = now()
        RETURNING id, public_key`,
+      [SEED_CLIENT_ID, SEED_PUBLIC_KEY, SEED_SECRET_KEY, SEED_CLIENT_NAME],
     );
     const workspaceId = workspace.rows[0].id;
     const publicKey = workspace.rows[0].public_key;
@@ -223,7 +228,7 @@ async function main() {
     await upsertVariant(client, upgrade, "annual_pro", annualPro.id, annualPro.spec, 2);
 
     await client.query("COMMIT");
-    console.log("Seeded Test Workspace (pk_test_demo / sk_test_demo)");
+    console.log(`Seeded ${SEED_CLIENT_NAME} (${publicKey})`);
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
