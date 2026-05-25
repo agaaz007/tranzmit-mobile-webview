@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "noEmit": false,
+    "lib": ["ES2020"],
+    "module": "ESNext",
+    "jsx": "preserve"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../shared" }
+  ]
+}

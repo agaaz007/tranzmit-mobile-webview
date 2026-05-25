@@ -1,0 +1,21 @@
+{
+  "name": "@tranzmit/server",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc -b --force",
+    "dev": "tsx watch src/index.ts",
+    "migrate": "tsx src/migrations.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@tranzmit/shared": "*",
+    "ajv": "^8.20.0",
+    "pg": "^8.12.0",
+    "statsig-node": "^5.0.0",
+    "tsx": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0"
+  }
+}

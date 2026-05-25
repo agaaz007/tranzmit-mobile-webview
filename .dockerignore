@@ -1,0 +1,14 @@
+.git
+.DS_Store
+node_modules
+**/node_modules
+.cache
+.expo
+coverage
+*.tgz
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+agent-tools
+examples/expo-react-native
+packages/tranzmit-sdk-expo

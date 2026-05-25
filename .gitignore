@@ -1,0 +1,15 @@
+node_modules/
+.env
+dist/
+packages/react/
+packages/*/dist/
+examples/*.html
+scripts/build-sdk.mjs
+scripts/serve-examples.mjs
+scripts/smoke-sdk.mjs
+*.tsbuildinfo
+.DS_Store
+.context/
+.dart_tool/
+build/
+.flutter-plugins-dependencies
