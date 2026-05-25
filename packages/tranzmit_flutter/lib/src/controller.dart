@@ -5,17 +5,17 @@ import 'package:flutter/foundation.dart';
 import 'client.dart';
 import 'models.dart';
 
-enum PresentationMode { modal, sheet, inline }
+enum PresentationMode { modal, sheet, fullscreen, inline }
 
 class GateOptions {
   const GateOptions({
-    this.presentation = PresentationMode.sheet,
+    this.presentation,
     this.onCTA,
     this.onDismiss,
     this.onImpression,
   });
 
-  final PresentationMode presentation;
+  final PresentationMode? presentation;
   final void Function(ProductSpec product)? onCTA;
   final VoidCallback? onDismiss;
   final VoidCallback? onImpression;
@@ -104,7 +104,7 @@ class TranzmitController extends ChangeNotifier {
       id: trigger,
       trigger: trigger,
       placement: placement,
-      presentation: options.presentation,
+      presentation: options.presentation ?? _presentationFromSpec(placement.spec),
       options: options,
       shownAt: DateTime.now(),
     );
@@ -123,7 +123,7 @@ class TranzmitController extends ChangeNotifier {
 
   GateResult presentPlacement(
     String trigger, {
-    PresentationMode presentation = PresentationMode.sheet,
+    PresentationMode? presentation,
     void Function(ProductSpec product)? onCTA,
     VoidCallback? onDismiss,
     VoidCallback? onImpression,
@@ -192,6 +192,20 @@ class TranzmitController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     super.dispose();
+  }
+}
+
+PresentationMode _presentationFromSpec(PaywallSpec spec) {
+  switch (spec.presentationMode) {
+    case 'modal':
+      return PresentationMode.modal;
+    case 'fullscreen':
+      return PresentationMode.fullscreen;
+    case 'inline':
+      return PresentationMode.inline;
+    case 'sheet':
+    default:
+      return PresentationMode.sheet;
   }
 }
 

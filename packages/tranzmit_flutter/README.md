@@ -55,6 +55,8 @@ await Tranzmit.of(context).refreshConfig();
 
 Production apps also use the server TTL cache, and hosted WebView documents are cached locally for offline rendering.
 
+Presentation is server-driven by default. Set `presentation.mode` on the paywall spec to `sheet`, `modal`, `fullscreen`, or `inline`; `presentPlacement()` uses that value unless you pass a local `presentation:` override.
+
 Track a conversion:
 
 ```dart

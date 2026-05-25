@@ -44,6 +44,8 @@ export interface WebViewBridgeSpec {
   allowedActions?: Array<"cta" | "dismiss" | "custom_action" | "open_url">;
 }
 
+export type PaywallPresentationMode = "sheet" | "modal" | "fullscreen" | "inline";
+
 export interface PaywallSpec {
   renderer?: "webview";
   /**
@@ -54,6 +56,9 @@ export interface PaywallSpec {
   templateId?: string;
   revision?: string | number;
   cacheKey?: string;
+  presentation?: {
+    mode: PaywallPresentationMode;
+  };
   document?: WebViewDocumentSpec;
   bridge?: WebViewBridgeSpec;
   header?: {

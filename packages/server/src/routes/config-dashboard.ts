@@ -267,6 +267,7 @@ const DASHBOARD_HTML = `<!doctype html>
                       <div class="field"><span class="field-label">Headline</span><input id="fieldTitle" class="spec-field"></div>
                       <div class="field"><span class="field-label">Subtitle</span><input id="fieldSubtitle" class="spec-field"></div>
                       <div class="field"><span class="field-label">CTA</span><input id="fieldCta" class="spec-field"></div>
+                      <div class="field"><span class="field-label">Presentation</span><select id="fieldPresentation" class="spec-field"><option value="sheet">Popup sheet</option><option value="modal">Centered popup</option><option value="fullscreen">Full screen</option><option value="inline">Inline</option></select></div>
                       <div class="field"><span class="field-label">Footer / Legal</span><input id="fieldLegal" class="spec-field"></div>
                     </div>
                     <div class="grid-3">
@@ -425,7 +426,7 @@ const DASHBOARD_HTML = `<!doctype html>
       lastCreatedSecretKey: null,
     };
     var els = {};
-    var fieldIds = ['fieldTitle','fieldSubtitle','fieldCta','fieldLegal','fieldProductName','fieldProductPrice','fieldOriginalPrice','fieldBadge','fieldMonthly','fieldSocialProof','fieldFeature1','fieldFeature2','fieldFeature3','fieldFeature4','fieldTestimonialName','fieldTestimonialFollowers','fieldTestimonialText','fieldAccentColor','fieldBackgroundColor','fieldTextColor'];
+    var fieldIds = ['fieldTitle','fieldSubtitle','fieldCta','fieldPresentation','fieldLegal','fieldProductName','fieldProductPrice','fieldOriginalPrice','fieldBadge','fieldMonthly','fieldSocialProof','fieldFeature1','fieldFeature2','fieldFeature3','fieldFeature4','fieldTestimonialName','fieldTestimonialFollowers','fieldTestimonialText','fieldAccentColor','fieldBackgroundColor','fieldTextColor'];
 
     document.addEventListener('DOMContentLoaded', function() {
       [
@@ -918,6 +919,7 @@ const DASHBOARD_HTML = `<!doctype html>
       els.fieldTitle.value = (spec.header && spec.header.title) || spec.headline || '';
       els.fieldSubtitle.value = (spec.header && spec.header.subtitle) || spec.subheadline || '';
       els.fieldCta.value = typeof spec.cta === 'string' ? spec.cta : (spec.cta && spec.cta.text) || '';
+      els.fieldPresentation.value = (spec.presentation && spec.presentation.mode) || 'sheet';
       els.fieldLegal.value = spec.legal || '';
       els.fieldProductName.value = product.name || '';
       els.fieldProductPrice.value = typeof product.price === 'string' ? product.price : (product.price ? JSON.stringify(product.price) : '');
@@ -943,6 +945,7 @@ const DASHBOARD_HTML = `<!doctype html>
         spec.header.title = els.fieldTitle.value;
         spec.header.subtitle = els.fieldSubtitle.value;
         spec.cta = typeof spec.cta === 'string' ? els.fieldCta.value : Object.assign({}, spec.cta || {}, { text: els.fieldCta.value });
+        spec.presentation = { mode: els.fieldPresentation.value || 'sheet' };
         spec.legal = els.fieldLegal.value;
         spec.social_proof = Object.assign({}, spec.social_proof || {}, { text: els.fieldSocialProof.value });
         spec.style = Object.assign({}, spec.style || {});
@@ -1043,16 +1046,19 @@ const DASHBOARD_HTML = `<!doctype html>
       var accent = style.accentColor || '#6537d9';
       var bg = style.backgroundColor || '#fbfaff';
       var text = style.textColor || '#17172e';
-      return 'body{font-family:-apple-system,BlinkMacSystemFont,\"Inter\",\"Segoe UI\",sans-serif;background:transparent;color:' + text + ';}' +
-        '.tz-paywall{min-height:100vh;background:' + bg + ';padding:22px 22px 18px;border-radius:28px;text-align:center;position:relative;overflow:hidden}' +
-        '.tz-close{position:absolute;left:16px;top:16px;border:0;background:#fff;border-radius:999px;width:38px;height:38px;font-size:28px;color:#6f6878}' +
-        '.brand{display:flex;justify-content:center;align-items:center;gap:8px;font-size:24px;margin:8px 0 20px}.mark{background:' + accent + ';color:#fff;padding:4px 6px;font-weight:900}' +
-        'h1{font-size:38px;line-height:1.08;margin:0 12px 10px;font-weight:900;letter-spacing:-1.4px}.subtitle{color:#6f6878;font-size:16px;line-height:1.4;margin:0 auto 18px;max-width:340px}' +
-        '.social{display:inline-block;background:#fff;border:1px solid #e8e1f6;border-radius:999px;padding:9px 14px;margin-bottom:18px;font-weight:800}' +
-        '.offer{background:#fff;border:1.5px solid ' + accent + ';border-radius:24px;padding:28px 18px 20px;margin:10px 4px 18px;box-shadow:0 12px 28px rgba(101,55,217,.12);position:relative}.badge{position:absolute;left:50%;top:-15px;transform:translateX(-50%);background:#e6b246;color:#fff;border-radius:8px;padding:7px 18px;font-weight:900;font-size:13px}.price-row{display:flex;align-items:flex-end;justify-content:center;gap:8px}.price-row strong{color:' + accent + ';font-size:56px;line-height:1;font-weight:900}.price-row span{font-size:22px;font-weight:800}.monthly{color:' + accent + ';font-weight:900;font-size:18px;margin:8px 0 0}.original{text-decoration:line-through;color:#8b8492;margin:4px 0 0}' +
-        '.features{display:grid;grid-template-columns:1fr;gap:8px;list-style:none;padding:0;margin:0 0 16px}.features li{display:flex;align-items:center;gap:10px;background:#fff;border-radius:14px;padding:12px;text-align:left;font-weight:700}.icon{background:#f5f1ff;color:' + accent + ';border-radius:10px;width:32px;height:32px;display:grid;place-items:center}' +
-        '.testimonial{background:#fff;border:1px solid #eeeaf4;border-radius:18px;padding:14px;margin-bottom:16px;text-align:left}.testimonial p{margin:6px 0 0;color:#3a3347}.cta{width:100%;border:0;border-radius:999px;background:' + accent + ';color:#fff;min-height:58px;font-size:20px;font-weight:900;box-shadow:0 12px 24px rgba(101,55,217,.22)}.legal{color:#736d7c;font-size:12px;margin:10px 0 0}' +
-        '.influish_annual_pro .features{grid-template-columns:repeat(3,1fr)}.influish_annual_pro .features li{display:block;text-align:center;font-size:13px}.influish_intro_offer .offer{margin-top:22px}';
+      return 'html,body{margin:0;min-height:100%;background:transparent;overflow-x:hidden}' +
+        'body{font-family:-apple-system,BlinkMacSystemFont,\"Inter\",\"Segoe UI\",sans-serif;background:transparent;color:' + text + ';}' +
+        '*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}' +
+        '.tz-paywall{min-height:100svh;background:' + bg + ';padding:clamp(14px,4vw,22px);padding-bottom:calc(clamp(92px,24vw,112px) + env(safe-area-inset-bottom));border-radius:clamp(20px,7vw,28px);text-align:center;position:relative;overflow-x:hidden;overflow-y:auto;display:flex;flex-direction:column;gap:clamp(8px,1.8vh,14px)}' +
+        '.tz-close{position:absolute;left:clamp(10px,3vw,16px);top:clamp(10px,3vw,16px);border:0;background:#fff;border-radius:999px;width:clamp(34px,9vw,38px);height:clamp(34px,9vw,38px);font-size:clamp(22px,7vw,28px);color:#6f6878;z-index:2}' +
+        '.brand{display:flex;justify-content:center;align-items:center;gap:8px;font-size:clamp(18px,5vw,24px);margin:clamp(4px,1vh,8px) 0 clamp(8px,2vh,16px)}.mark{background:' + accent + ';color:#fff;padding:4px 6px;font-weight:900}' +
+        'h1{font-size:clamp(28px,9vw,38px);line-height:1.05;margin:0 clamp(10px,3vw,18px) 8px;font-weight:900;letter-spacing:-.04em;text-wrap:balance}.subtitle{color:#6f6878;font-size:clamp(14px,4vw,16px);line-height:1.4;margin:0 auto 10px;max-width:340px}' +
+        '.social{display:inline-block;background:#fff;border:1px solid #e8e1f6;border-radius:999px;padding:8px 12px;margin-bottom:8px;font-weight:800;font-size:clamp(12px,3.5vw,14px)}' +
+        '.offer{background:#fff;border:1.5px solid ' + accent + ';border-radius:clamp(18px,6vw,24px);padding:clamp(16px,5vw,28px) clamp(12px,4vw,18px) clamp(14px,4vw,20px);margin:clamp(8px,2vh,14px) 0 8px;box-shadow:0 12px 28px rgba(101,55,217,.12);position:relative}.badge{position:absolute;left:50%;top:-14px;transform:translateX(-50%);background:#e6b246;color:#fff;border-radius:8px;padding:6px 14px;font-weight:900;font-size:12px;white-space:nowrap}.price-row{display:flex;align-items:flex-end;justify-content:center;gap:8px;flex-wrap:wrap}.price-row strong{color:' + accent + ';font-size:clamp(38px,13vw,56px);line-height:1;font-weight:900}.price-row span{font-size:clamp(16px,5vw,22px);font-weight:800}.monthly{color:' + accent + ';font-weight:900;font-size:clamp(14px,4.5vw,18px);margin:6px 0 0}.original{text-decoration:line-through;color:#8b8492;margin:4px 0 0;font-size:13px}' +
+        '.features{display:grid;grid-template-columns:1fr;gap:8px;list-style:none;padding:0;margin:0 0 8px}.features li{display:flex;align-items:center;gap:10px;background:#fff;border-radius:14px;padding:clamp(10px,3vw,12px);text-align:left;font-weight:700;font-size:clamp(13px,3.8vw,15px);line-height:1.25}.icon{background:#f5f1ff;color:' + accent + ';border-radius:10px;min-width:32px;width:32px;height:32px;display:grid;place-items:center}' +
+        '.testimonial{background:#fff;border:1px solid #eeeaf4;border-radius:18px;padding:12px;margin-bottom:8px;text-align:left;font-size:clamp(13px,3.7vw,15px)}.testimonial p{margin:6px 0 0;color:#3a3347;line-height:1.3}.cta{border:0;border-radius:999px;background:' + accent + ';color:#fff;min-height:clamp(52px,13vw,58px);font-size:clamp(17px,4.8vw,20px);font-weight:900;box-shadow:0 12px 24px rgba(101,55,217,.22);position:fixed;left:clamp(14px,4vw,22px);right:clamp(14px,4vw,22px);bottom:clamp(14px,4vw,22px);z-index:3}.legal{color:#736d7c;font-size:12px;margin:4px 0 0;line-height:1.35}' +
+        '.influish_annual_pro .features{grid-template-columns:repeat(auto-fit,minmax(88px,1fr))}.influish_annual_pro .features li{display:block;text-align:center;font-size:13px}.influish_intro_offer .offer{margin-top:22px}' +
+        '@supports (min-height:100dvh){.tz-paywall{min-height:100dvh}}@media (max-height:680px){.brand{display:none}.testimonial{display:none}.tz-paywall{gap:7px}.features{gap:6px}}';
     }
 
     function composePreviewDocument(spec) {

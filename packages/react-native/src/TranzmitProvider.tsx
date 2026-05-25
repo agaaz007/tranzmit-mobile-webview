@@ -101,7 +101,7 @@ export function TranzmitProvider({
       id: trigger,
       trigger,
       placement,
-      presentation: options.presentation || "sheet",
+      presentation: options.presentation || presentationFromSpec(placement.spec),
       options,
       shownAt: Date.now(),
     };
@@ -164,6 +164,13 @@ export function TranzmitProvider({
       />
     </TranzmitContext.Provider>
   );
+}
+
+function presentationFromSpec(spec: any) {
+  const mode = spec?.presentation?.mode;
+  return mode === "modal" || mode === "fullscreen" || mode === "inline" || mode === "sheet"
+    ? mode
+    : "sheet";
 }
 
 function attribution(trigger: string, placement: ActivePaywall["placement"]): Record<string, unknown> {

@@ -165,6 +165,7 @@ export async function handleAdmin(
       }
     }
 
+    const nextSpecJson = body.spec === undefined ? null : JSON.stringify(body.spec);
     const result = await query(
       `UPDATE paywall_specs
        SET name = COALESCE($2, name),
@@ -176,9 +177,26 @@ export async function handleAdmin(
       [
         specIdMatch[1],
         typeof body.name === "string" && body.name.trim() ? body.name.trim() : null,
-        body.spec === undefined ? null : JSON.stringify(body.spec),
+        nextSpecJson,
       ]
     );
+
+    if (nextSpecJson !== null) {
+      await query(
+        `UPDATE placements
+         SET spec = $2,
+             updated_at = now()
+         WHERE default_spec_id = $1`,
+        [specIdMatch[1], nextSpecJson]
+      );
+      await query(
+        `UPDATE placement_variants
+         SET spec = $2
+         WHERE spec_id = $1`,
+        [specIdMatch[1], nextSpecJson]
+      );
+    }
+
     sendJson(res, 200, result.rows[0]);
     return;
   }

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { PlacementConfig, ProductSpec } from "@tranzmit/shared";
 
-export type PresentationMode = "modal" | "sheet" | "inline";
+export type PresentationMode = "modal" | "sheet" | "fullscreen" | "inline";
 
 export interface TranzmitProviderProps {
   publicKey: string;

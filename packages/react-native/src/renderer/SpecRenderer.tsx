@@ -55,7 +55,7 @@ export function SpecRenderer({
   };
 
   return (
-    <View style={{ width: "100%", height: heightForPresentation(presentation), overflow: "hidden", borderRadius: presentation === "inline" ? 0 : 28 }}>
+    <View style={{ width: "100%", height: heightForPresentation(presentation), overflow: "hidden", borderRadius: presentation === "inline" || presentation === "fullscreen" ? 0 : 28 }}>
       <WebView
         originWhitelist={["*"]}
         source={{ html, baseUrl: spec.document?.baseUrl }}
@@ -74,6 +74,7 @@ export function SpecRenderer({
 
 function heightForPresentation(presentation: PresentationMode) {
   if (presentation === "inline") return 560;
+  if (presentation === "fullscreen") return "100%";
   if (presentation === "modal") return "86%";
   return "82%";
 }

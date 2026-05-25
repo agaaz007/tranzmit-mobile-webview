@@ -61,13 +61,14 @@ export function ensureWebViewSpec(spec: unknown, context?: WebViewDocumentContex
   const js = stringOrUndefined(existingDocument.js);
   const baseUrl = stringOrUndefined(existingDocument.baseUrl);
   const contentHash = hashDocument({ html, css, js, baseUrl });
-  const revision = next.revision || `doc-${contentHash.slice(0, 12)}`;
-  const cacheKey = next.cacheKey || `${next.templateId}:${revision}`;
+  const revision = `doc-${contentHash.slice(0, 12)}`;
+  const cacheKey = `${next.templateId}:${revision}`;
   const integrity = `sha256-${contentHash}`;
   const includeInline = context?.includeInline ?? true;
 
   next.revision = revision;
   next.cacheKey = cacheKey;
+  next.presentation = normalizePresentation(next.presentation);
   next.document = {
     ...(includeInline ? { html, css, ...(js ? { js } : {}), ...(baseUrl ? { baseUrl } : {}) } : {}),
     ...(context ? {
@@ -82,6 +83,16 @@ export function ensureWebViewSpec(spec: unknown, context?: WebViewDocumentContex
   };
 
   return next;
+}
+
+function normalizePresentation(value: unknown): { mode: string } {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const mode = (value as JsonRecord).mode;
+    if (["sheet", "modal", "fullscreen", "inline"].includes(String(mode))) {
+      return { mode: String(mode) };
+    }
+  }
+  return { mode: "sheet" };
 }
 
 export function webViewDocumentPayload(spec: unknown): WebViewDocumentPayload {
@@ -159,7 +170,7 @@ function buildLegacyWebViewCss(spec: JsonRecord): string {
   const secondary = spec.style?.secondaryTextColor || "#6f6878";
   const background = spec.style?.backgroundColor || "#fbfaff";
 
-  return `body{min-height:100vh;margin:0;background:transparent;color:${text};font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.tranzmit-paywall{min-height:100vh;background:${background};padding:24px;position:relative}.close{position:absolute;left:16px;top:16px;border:0;border-radius:999px;background:#fff;color:${secondary};width:38px;height:38px;font-size:28px}.card{background:#fff;border-radius:28px;box-shadow:0 24px 80px rgba(15,23,42,.16);padding:34px 24px;text-align:center}h1{font-size:36px;line-height:1.05;margin:0 0 10px;font-weight:900;letter-spacing:-.04em}.subtitle{color:${secondary};font-size:16px;line-height:1.45;margin:0 0 18px}ul{display:grid;gap:10px;list-style:none;margin:18px 0;padding:0;text-align:left}li{align-items:center;background:#f8f5ff;border:1px solid #ece4fb;border-radius:14px;display:flex;gap:10px;padding:12px;font-weight:700}.icon{color:${accent};font-weight:900}.offer{border:1.5px solid ${accent};border-radius:22px;display:grid;gap:6px;margin:18px 0;padding:18px}.offer strong{color:${accent};font-size:24px}.badge{justify-self:center;background:#e6b246;color:#fff;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:900}.cta,.secondary{width:100%;border:0;border-radius:999px;min-height:56px;font-size:17px;font-weight:900}.cta{background:${accent};color:#fff}.secondary{background:transparent;color:${secondary};margin-top:8px}.legal{color:${secondary};font-size:12px}`;
+  return `html,body{margin:0;min-height:100%;background:transparent;overflow-x:hidden}body{color:${text};font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.tranzmit-paywall{min-height:100svh;background:${background};padding:clamp(16px,5vw,24px);padding-bottom:calc(clamp(92px,24vw,112px) + env(safe-area-inset-bottom));position:relative;overflow-x:hidden;overflow-y:auto}.close{position:absolute;left:clamp(10px,3vw,16px);top:clamp(10px,3vw,16px);border:0;border-radius:999px;background:#fff;color:${secondary};width:clamp(34px,9vw,38px);height:clamp(34px,9vw,38px);font-size:clamp(22px,7vw,28px);z-index:2}.card{background:#fff;border-radius:clamp(20px,7vw,28px);box-shadow:0 24px 80px rgba(15,23,42,.16);padding:clamp(24px,7vw,34px) clamp(16px,5vw,24px);text-align:center}h1{font-size:clamp(28px,9vw,36px);line-height:1.05;margin:0 0 10px;font-weight:900;letter-spacing:-.04em;text-wrap:balance}.subtitle{color:${secondary};font-size:clamp(14px,4vw,16px);line-height:1.45;margin:0 0 18px}ul{display:grid;gap:10px;list-style:none;margin:18px 0;padding:0;text-align:left}li{align-items:center;background:#f8f5ff;border:1px solid #ece4fb;border-radius:14px;display:flex;gap:10px;padding:clamp(10px,3vw,12px);font-weight:700;font-size:clamp(13px,3.8vw,16px);line-height:1.25}.icon{color:${accent};font-weight:900}.offer{border:1.5px solid ${accent};border-radius:22px;display:grid;gap:6px;margin:18px 0;padding:clamp(14px,4.5vw,18px)}.offer strong{color:${accent};font-size:clamp(20px,6vw,24px);overflow-wrap:anywhere}.badge{justify-self:center;background:#e6b246;color:#fff;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:900}.cta,.secondary{width:100%;border:0;border-radius:999px;min-height:clamp(52px,13vw,56px);font-size:clamp(16px,4.5vw,17px);font-weight:900}.cta{background:${accent};color:#fff;position:fixed;left:clamp(16px,5vw,24px);right:clamp(16px,5vw,24px);bottom:clamp(16px,5vw,24px);z-index:3}.secondary{background:transparent;color:${secondary};margin-top:8px}.legal{color:${secondary};font-size:12px}`;
 }
 
 function cloneRecord(value: unknown): JsonRecord {

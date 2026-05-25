@@ -26,12 +26,29 @@ If you skip `onCTA`, the button tap is tracked but no purchase starts. This is i
 
 ## Remote Update Model
 
-- Dashboard saves rebuild each paywall into a WebView document with a new `revision` and `cacheKey`.
+- Dashboard saves rebuild each paywall into a WebView document. The server derives `revision` and `cacheKey` from document content, so any HTML/CSS/JS change creates a new hosted document URL instead of reusing Android/iOS cached content.
+- Saving a spec also propagates it to any live placements and A/B variants that reference that spec.
 - `/v1/config` returns placement assignments and document metadata.
 - Hosted document payloads are served from `/v1/paywall-documents/...` with long-lived immutable cache headers.
 - Mobile SDKs hydrate hosted documents, store them inside the TTL-aware config cache, and can render the last cached document offline.
 - `CONFIG_TTL_SECONDS` defaults to 60 seconds. During QA, call `refreshConfig()` after saving in the dashboard to see changes immediately.
 - Existing legacy/native specs are normalized server-side into WebView documents, so production does not depend on app-side legacy rendering.
+
+## Server-Driven Presentation
+
+Set `presentation.mode` in the paywall spec to control how SDKs display the same hosted document:
+
+```json
+{
+  "presentation": { "mode": "sheet" }
+}
+```
+
+Supported values are `sheet` (bottom popup), `modal` (centered popup), `fullscreen`, and `inline`. If app code passes an explicit presentation mode to `gate()` / `presentPlacement()`, that local override wins; otherwise the SDK uses the server value and falls back to `sheet`.
+
+## Responsive WebView Contract
+
+Every hosted paywall document must be mobile-fluid: no fixed desktop-only cards, no root `overflow:hidden`, and no typography that assumes one screen width. The server templates use `clamp()` sizing, scrollable WebView roots, and fixed bottom CTA buttons; mobile SDKs inject a final safety stylesheet so hosted documents fit Android/iOS screen sizes instead of clipping.
 
 ## How It Works
 

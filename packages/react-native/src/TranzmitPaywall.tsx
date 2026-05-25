@@ -22,7 +22,7 @@ export function TranzmitPaywall({
   spec,
   variantId,
   visible,
-  presentation = "sheet",
+  presentation,
   onCTA,
   onDismiss,
   onImpression,
@@ -58,7 +58,7 @@ export function TranzmitPaywall({
     return (
       <SpecRenderer
         spec={resolvedSpec}
-        presentation={presentation}
+        presentation={presentation || presentationFromSpec(resolvedSpec)}
         onCTA={(product) => {
           track("cta_click", {
             trigger: resolvedTrigger,
@@ -75,10 +75,18 @@ export function TranzmitPaywall({
   }, [handleDismiss, onCTA, presentation, resolvedSpec, resolvedTrigger, resolvedVariantId, track]);
 
   if (!visible || !resolvedSpec || !content) return null;
-  if (presentation === "inline") return content;
-  if (presentation === "modal") {
+  const resolvedPresentation = presentation || presentationFromSpec(resolvedSpec);
+  if (resolvedPresentation === "inline") return content;
+  if (resolvedPresentation === "modal") {
     return (
       <ModalPresenter visible onDismiss={handleDismiss}>
+        {content}
+      </ModalPresenter>
+    );
+  }
+  if (resolvedPresentation === "fullscreen") {
+    return (
+      <ModalPresenter visible onDismiss={handleDismiss} fullscreen>
         {content}
       </ModalPresenter>
     );
@@ -88,4 +96,11 @@ export function TranzmitPaywall({
       {content}
     </SheetPresenter>
   );
+}
+
+function presentationFromSpec(spec: any): PresentationMode {
+  const mode = spec?.presentation?.mode;
+  return mode === "modal" || mode === "fullscreen" || mode === "inline" || mode === "sheet"
+    ? mode
+    : "sheet";
 }

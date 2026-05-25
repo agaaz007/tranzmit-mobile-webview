@@ -119,8 +119,35 @@ describe("GET /config", () => {
     expect(config.placements.onboarding.spec.headline).toBe("Welcome");
     expect(config.placements.onboarding.spec.renderer).toBe("webview");
     expect(config.placements.onboarding.spec.document?.html).toContain("Welcome");
+    expect(config.placements.onboarding.spec.document?.css).toContain("clamp(");
+    expect(config.placements.onboarding.spec.document?.css).toContain("overflow-y:auto");
+    expect(config.placements.onboarding.spec.document?.css).toContain("position:fixed");
+    expect(config.placements.onboarding.spec.document?.css).not.toContain("overflow:hidden");
+    expect(config.placements.onboarding.spec.presentation?.mode).toBe("sheet");
     expect(config.placements.onboarding.spec.document?.url).toContain("/v1/paywall-documents/pl_1/var_1/");
 	    expect("experimentId" in config.placements.onboarding).toBe(false);
+	  });
+
+	  it("changes hosted document URLs when document content changes", async () => {
+	    const { ensureWebViewSpec } = await import("../src/webview-documents.js");
+	    const context = {
+	      publicKey: "pk_test_valid",
+	      placementId: "pl_1",
+	      variantKey: "var_1",
+	      apiBaseUrl: "https://api.example.test",
+	      includeInline: false,
+	    };
+	    const before = ensureWebViewSpec(
+	      { renderer: "webview", templateId: "paywall", headline: "Before", cta: "Go", products: [] },
+	      context
+	    );
+	    const after = ensureWebViewSpec(
+	      { renderer: "webview", templateId: "paywall", headline: "After", cta: "Go", products: [] },
+	      context
+	    );
+
+	    expect(before.cacheKey).not.toBe(after.cacheKey);
+	    expect(before.document.url).not.toBe(after.document.url);
 	  });
 
 	  it("returns the Statsig-assigned variant spec", async () => {

@@ -105,7 +105,20 @@ class _SpecRendererState extends State<SpecRenderer> {
 
   @override
   Widget build(BuildContext context) {
-    final radius = widget.presentation == PresentationMode.inline ? 0.0 : 28.0;
+    final html = widget.spec.document?.html;
+    if (html == null || html.isEmpty) {
+      return _MissingDocumentView(
+        cacheKey: widget.spec.cacheKey,
+        documentUrl: widget.spec.document?.url,
+        height: _heightFor(context),
+        presentation: widget.presentation,
+      );
+    }
+
+    final radius = widget.presentation == PresentationMode.inline ||
+            widget.presentation == PresentationMode.fullscreen
+        ? 0.0
+        : 28.0;
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: SizedBox(
@@ -122,9 +135,11 @@ class _SpecRendererState extends State<SpecRenderer> {
       case PresentationMode.inline:
         return height * 0.72;
       case PresentationMode.modal:
-        return height * 0.86;
+        return height * 0.90;
+      case PresentationMode.fullscreen:
+        return height;
       case PresentationMode.sheet:
-        return height * 0.82;
+        return height * 0.86;
     }
   }
 }
@@ -166,7 +181,12 @@ ProductSpec? productForWebViewBridgeMessage(
 }
 
 String _composeDocument(PaywallSpec spec) {
-  final document = spec.document ?? _legacyDocument(spec);
+  final document = spec.document;
+  final html = document?.html;
+  if (document == null || html == null || html.isEmpty) {
+    return '''<!doctype html><html><body></body></html>''';
+  }
+
   const bootstrap = '''
 <script>
 (function(){
@@ -207,89 +227,88 @@ String _composeDocument(PaywallSpec spec) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <style>
-  html, body { margin: 0; padding: 0; background: transparent; -webkit-font-smoothing: antialiased; }
+  html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; background: transparent; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  body { min-height: 100svh; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   button, a { touch-action: manipulation; }
+  img, svg, video, canvas { max-width: 100%; height: auto; }
 ${document.css ?? ''}
+  html, body { max-width: 100vw; overflow-x: hidden !important; }
+  body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .tz-paywall, .tranzmit-paywall {
+    max-width: 100vw;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+  h1, h2, h3, p, strong, span, button, a { overflow-wrap: anywhere; }
+  @supports (min-height: 100dvh) { body { min-height: 100dvh; } }
 </style>
 </head>
 <body>
-${document.html ?? ''}
+$html
 ${document.js == null ? '' : '<script>${document.js}</script>'}
 $bootstrap
 </body>
 </html>''';
 }
 
-WebViewDocumentSpec _legacyDocument(PaywallSpec spec) {
-  final product = _defaultProduct(spec);
-  final title = spec.header?.title ?? spec.headline ?? 'Upgrade';
-  final subtitle = spec.header?.subtitle ?? spec.subheadline;
-  final featureItems = (spec.features ?? const [])
-      .map((feature) => '<li>${_escapeHtml(_featureText(feature))}</li>')
-      .join();
-  final price = product == null ? '' : _priceText(product);
-  final productHtml = product == null
-      ? ''
-      : '''
-<div class="product">
-  ${product.badge == null ? '' : '<span class="badge">${_escapeHtml(product.badge!)}</span>'}
-  <strong>${_escapeHtml(product.name)}</strong>
-  ${price.isEmpty ? '' : '<span>${_escapeHtml(price)}</span>'}
-</div>''';
+class _MissingDocumentView extends StatelessWidget {
+  const _MissingDocumentView({
+    required this.cacheKey,
+    required this.documentUrl,
+    required this.height,
+    required this.presentation,
+  });
 
-  return WebViewDocumentSpec(
-    html: '''
-<main class="tranzmit-paywall">
-  <section class="card">
-    <h1>${_escapeHtml(title)}</h1>
-    ${subtitle == null ? '' : '<p class="subtitle">${_escapeHtml(subtitle)}</p>'}
-    ${featureItems.isEmpty ? '' : '<ul>$featureItems</ul>'}
-    $productHtml
-    <button data-tranzmit-action="cta" data-product-id="${_escapeHtml(product?.id ?? 'product')}">${_escapeHtml(spec.cta.text)}</button>
-    ${spec.secondaryCta == null ? '' : '<button class="secondary" data-tranzmit-action="dismiss">${_escapeHtml(spec.secondaryCta!)}</button>'}
-  </section>
-</main>''',
-    css: '''
-body { min-height: 100vh; display: grid; place-items: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: rgba(15, 23, 42, 0.48); color: #111827; }
-.tranzmit-paywall { width: 100%; padding: 24px; }
-.card { background: #fff; border-radius: 28px; box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28); padding: 28px; text-align: center; }
-h1 { margin: 0; font-size: 32px; line-height: 1.05; letter-spacing: -0.04em; }
-.subtitle { color: #6b7280; font-size: 16px; line-height: 1.45; }
-ul { padding: 0; list-style: none; display: grid; gap: 10px; margin: 20px 0; text-align: left; }
-li { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px; }
-.product { display: grid; gap: 6px; border: 1px solid #dbeafe; background: #eff6ff; border-radius: 18px; padding: 16px; margin: 18px 0; }
-.badge { justify-self: center; background: #1d4ed8; color: white; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
-button { width: 100%; border: 0; border-radius: 999px; background: #1d4ed8; color: white; padding: 16px; font-size: 16px; font-weight: 800; }
-.secondary { margin-top: 10px; background: transparent; color: #64748b; }
-''',
-  );
-}
+  final String? cacheKey;
+  final String? documentUrl;
+  final double height;
+  final PresentationMode presentation;
 
-String _featureText(Object? feature) {
-  if (feature is Map) {
-    final text = feature['text'] ?? feature['title'] ?? feature['label'];
-    if (text != null) return text.toString();
+  @override
+  Widget build(BuildContext context) {
+    final radius = presentation == PresentationMode.inline ||
+            presentation == PresentationMode.fullscreen
+        ? 0.0
+        : 28.0;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: SizedBox(
+        width: double.infinity,
+        height: height,
+        child: ColoredBox(
+          color: const Color(0xFFFFF7ED),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Paywall document not loaded',
+                  style: TextStyle(
+                    color: Color(0xFF9A3412),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'This SDK does not render local fallback paywalls. Wait for init/refresh to hydrate the hosted document from your Tranzmit server.',
+                  style: TextStyle(color: Color(0xFF7C2D12), height: 1.4),
+                ),
+                if (cacheKey != null) ...[
+                  const SizedBox(height: 12),
+                  Text('cacheKey: $cacheKey', style: const TextStyle(fontSize: 12)),
+                ],
+                if (documentUrl != null) ...[
+                  const SizedBox(height: 4),
+                  Text('url: $documentUrl', style: const TextStyle(fontSize: 12)),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
-  return feature.toString().split('|').first;
-}
-
-String _priceText(ProductSpec product) {
-  final price = product.price;
-  if (price is String) return price;
-  if (price is ProductPrice) {
-    final dollars = (price.amount / 100).toStringAsFixed(2);
-    final interval = price.interval == null ? '' : ' / ${price.interval}';
-    return '${price.currency} $dollars$interval';
-  }
-  return price.toString();
-}
-
-String _escapeHtml(String value) {
-  return value
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#39;');
 }

@@ -21,14 +21,15 @@ void main() {
           apiBaseUrl: 'https://example.test',
         ),
         client: client,
-        child: const ExampleApp(),
+        child: const SdkHarnessApp(),
       ),
     );
 
     await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(find.text('Tranzmit Flutter'), findsOneWidget);
-    expect(find.text('Upgrade'), findsOneWidget);
+    expect(find.text('Tranzmit SDK Harness'), findsOneWidget);
+    expect(find.textContaining('upgrade_pro'), findsWidgets);
     await client.flush();
   });
 }

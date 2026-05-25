@@ -35,6 +35,14 @@ export function PaywallHost({ activePaywalls, onCTA, onDismiss }: PaywallHostPro
           );
         }
 
+        if (active.presentation === "fullscreen") {
+          return (
+            <ModalPresenter key={active.id} visible onDismiss={() => onDismiss(active)} fullscreen>
+              {content}
+            </ModalPresenter>
+          );
+        }
+
         return (
           <SheetPresenter key={active.id} visible onDismiss={() => onDismiss(active)}>
             {content}

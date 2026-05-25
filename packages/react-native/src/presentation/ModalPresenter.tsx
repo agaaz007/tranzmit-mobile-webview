@@ -12,10 +12,12 @@ export function ModalPresenter({
   visible,
   onDismiss,
   children,
+  fullscreen = false,
 }: {
   visible: boolean;
   onDismiss: () => void;
   children: ReactNode;
+  fullscreen?: boolean;
 }) {
   return (
     <Modal
@@ -39,7 +41,10 @@ export function ModalPresenter({
             top: 0,
           }}
         />
-        <SafeAreaView style={{ flex: 1, justifyContent: "center", paddingHorizontal: 18, paddingVertical: 12 }}>
+        <SafeAreaView style={fullscreen
+          ? { flex: 1, backgroundColor: "#000" }
+          : { flex: 1, justifyContent: "center", paddingHorizontal: 18, paddingVertical: 12 }}
+        >
           {children}
         </SafeAreaView>
       </View>

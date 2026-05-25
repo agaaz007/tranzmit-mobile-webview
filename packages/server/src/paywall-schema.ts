@@ -61,6 +61,14 @@ export const paywallSpecSchema = {
       oneOf: [{ type: "string" }, { type: "number" }],
     },
     cacheKey: { type: "string" },
+    presentation: {
+      type: "object",
+      additionalProperties: false,
+      required: ["mode"],
+      properties: {
+        mode: { enum: ["sheet", "modal", "fullscreen", "inline"] },
+      },
+    },
     document: {
       type: "object",
       additionalProperties: false,

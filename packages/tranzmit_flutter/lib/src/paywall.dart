@@ -40,7 +40,7 @@ class TranzmitPaywall extends StatefulWidget {
     this.trigger,
     this.spec,
     this.variantId,
-    this.presentation = PresentationMode.sheet,
+    this.presentation,
     this.onCTA,
     this.onDismiss,
     this.onImpression,
@@ -50,7 +50,7 @@ class TranzmitPaywall extends StatefulWidget {
   final PaywallSpec? spec;
   final String? variantId;
   final bool visible;
-  final PresentationMode presentation;
+  final PresentationMode? presentation;
   final void Function(ProductSpec product)? onCTA;
   final VoidCallback? onDismiss;
   final VoidCallback? onImpression;
@@ -93,7 +93,7 @@ class _TranzmitPaywallState extends State<TranzmitPaywall> {
 
     return _PresentedSpec(
       spec: spec,
-      presentation: widget.presentation,
+      presentation: widget.presentation ?? _presentationFromSpec(spec),
       onCTA: (product) {
         controller?.track('cta_click', {
           'trigger': trigger,
@@ -173,6 +173,20 @@ class _PresentedSpec extends StatelessWidget {
       ),
     );
 
+    if (presentation == PresentationMode.fullscreen) {
+      return Positioned.fill(
+        child: Material(
+          color: Colors.black,
+          child: SpecRenderer(
+            spec: spec,
+            presentation: presentation,
+            onCTA: onCTA,
+            onDismiss: onDismiss,
+          ),
+        ),
+      );
+    }
+
     if (presentation == PresentationMode.modal) {
       return Positioned.fill(
         child: Container(
@@ -201,5 +215,19 @@ class _PresentedSpec extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+PresentationMode _presentationFromSpec(PaywallSpec spec) {
+  switch (spec.presentationMode) {
+    case 'modal':
+      return PresentationMode.modal;
+    case 'fullscreen':
+      return PresentationMode.fullscreen;
+    case 'inline':
+      return PresentationMode.inline;
+    case 'sheet':
+    default:
+      return PresentationMode.sheet;
   }
 }

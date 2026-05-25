@@ -302,6 +302,7 @@ class PaywallSpec {
     this.templateId,
     this.revision,
     this.cacheKey,
+    this.presentationMode,
     this.bridge,
     this.header,
     this.headline,
@@ -324,6 +325,7 @@ class PaywallSpec {
   final String? templateId;
   final Object? revision;
   final String? cacheKey;
+  final String? presentationMode;
   final WebViewBridgeSpec? bridge;
   final PaywallHeaderSpec? header;
   final String? headline;
@@ -353,6 +355,7 @@ class PaywallSpec {
       templateId: json['templateId'] as String?,
       revision: json['revision'],
       cacheKey: json['cacheKey'] as String?,
+      presentationMode: _presentationMode(json['presentation']),
       bridge: json['bridge'] == null
           ? null
           : WebViewBridgeSpec.fromJson(
@@ -403,6 +406,7 @@ class PaywallSpec {
         if (templateId != null) 'templateId': templateId,
         if (revision != null) 'revision': revision,
         if (cacheKey != null) 'cacheKey': cacheKey,
+        if (presentationMode != null) 'presentation': {'mode': presentationMode},
         if (bridge != null) 'bridge': bridge!.toJson(),
         if (header != null) 'header': header!.toJson(),
         if (headline != null) 'headline': headline,
@@ -421,6 +425,19 @@ class PaywallSpec {
         if (assets != null) 'assets': assets!.toJson(),
         if (metadata != null) 'metadata': metadata,
       };
+}
+
+String? _presentationMode(Object? value) {
+  if (value is Map) {
+    final mode = value['mode']?.toString();
+    if (mode == 'sheet' ||
+        mode == 'modal' ||
+        mode == 'fullscreen' ||
+        mode == 'inline') {
+      return mode;
+    }
+  }
+  return null;
 }
 
 class PlacementConfig {
