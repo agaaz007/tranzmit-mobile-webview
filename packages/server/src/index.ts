@@ -32,6 +32,48 @@ function rateLimited(res: ServerResponse, resetAt: number): void {
   res.end(JSON.stringify({ error: "Too many requests" }));
 }
 
+function serveHome(res: ServerResponse): void {
+  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+  res.end(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tranzmit WebView Paywalls</title>
+  <style>
+    :root{color-scheme:light;--bg:#fbfaff;--card:#fff;--ink:#17172e;--muted:#6f6878;--accent:#6537d9;--line:#e8e1f6}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,var(--bg),#fff);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    main{max-width:920px;margin:0 auto;padding:56px 22px}.eyebrow{color:var(--accent);font-size:13px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+    h1{font-size:clamp(34px,6vw,64px);line-height:.98;letter-spacing:-.06em;margin:10px 0 14px}p{color:var(--muted);font-size:18px;line-height:1.55;margin:0}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:30px}.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:20px;box-shadow:0 16px 40px rgba(101,55,217,.08)}
+    .card b{display:block;font-size:16px;margin-bottom:6px}.card span{color:var(--muted);font-size:14px;line-height:1.45}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+    a{color:inherit}.button{background:var(--accent);border-radius:999px;color:#fff;display:inline-flex;font-weight:900;padding:13px 18px;text-decoration:none}.button.secondary{background:#f2edff;color:var(--accent)}
+    code{background:#f6f2ff;border:1px solid var(--line);border-radius:10px;color:#3b246f;display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;margin-top:20px;overflow:auto;padding:14px;white-space:pre}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">Tranzmit Mobile WebView API</div>
+    <h1>Server-driven paywalls are online.</h1>
+    <p>This Railway service powers WebView paywall config, hosted paywall documents, analytics events, and the customer config dashboard.</p>
+    <div class="actions">
+      <a class="button" href="/config-dashboard">Open Config Dashboard</a>
+      <a class="button secondary" href="/health">Check Health</a>
+      <a class="button secondary" href="https://github.com/agaaz007/tranzmit-mobile-webview">GitHub Repo</a>
+    </div>
+    <div class="grid">
+      <section class="card"><b>Remote paywall config</b><span>POST <code style="display:inline;margin:0;padding:2px 6px">/v1/config</code> to fetch placements, variants, and hosted WebView document URLs.</span></section>
+      <section class="card"><b>Hosted WebView documents</b><span>SDKs hydrate <code style="display:inline;margin:0;padding:2px 6px">/v1/paywall-documents/...</code> payloads and cache them for offline rendering.</span></section>
+      <section class="card"><b>Purchase flow</b><span>Tranzmit owns paywall UI. Customer apps own StoreKit, Play Billing, RevenueCat, or Stripe, then call <code style="display:inline;margin:0;padding:2px 6px">reportConversion()</code>.</span></section>
+    </div>
+    <code>curl -X POST /v1/config \\
+  -H 'Content-Type: application/json' \\
+  -d '{"publicKey":"pk_test_2a8a5f07d4b9fcf1cc77e024","identity":{"userId":"user_123"}}'</code>
+  </main>
+</body>
+</html>`);
+}
+
 async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   setCors(res);
 
@@ -46,6 +88,12 @@ async function handler(req: IncomingMessage, res: ServerResponse): Promise<void>
   const ip = getClientIp(req);
 
   try {
+    // --- Human-friendly service root ---
+    if (path === "/" && req.method === "GET") {
+      serveHome(res);
+      return;
+    }
+
     // --- Mobile config dashboard (no rate limit, served directly) ---
     if (path === "/config-dashboard") {
       serveConfigDashboard(res);
