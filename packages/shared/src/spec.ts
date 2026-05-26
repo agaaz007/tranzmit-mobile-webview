@@ -46,6 +46,25 @@ export interface WebViewBridgeSpec {
 
 export type PaywallPresentationMode = "sheet" | "modal" | "fullscreen" | "inline";
 
+export interface PaywallDesignBreakpoint {
+  id: string;
+  width: number;
+  height: number;
+  scale?: number;
+}
+
+export interface PaywallDesignDocument {
+  source: string;
+  version: number;
+  artboard: {
+    id: string;
+    name?: string;
+    width: number;
+    height: number;
+  };
+  breakpoints?: PaywallDesignBreakpoint[];
+}
+
 export interface PaywallSpec {
   renderer?: "webview";
   /**
@@ -59,6 +78,12 @@ export interface PaywallSpec {
   presentation?: {
     mode: PaywallPresentationMode;
   };
+  /**
+   * Source design metadata used by the server/compiler to produce responsive
+   * WebView markup. SDKs do not render this directly, but it makes the artboard
+   * and device breakpoints explicit in the remote spec.
+   */
+  design?: PaywallDesignDocument;
   document?: WebViewDocumentSpec;
   bridge?: WebViewBridgeSpec;
   header?: {

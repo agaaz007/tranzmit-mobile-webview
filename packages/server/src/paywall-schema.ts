@@ -69,6 +69,40 @@ export const paywallSpecSchema = {
         mode: { enum: ["sheet", "modal", "fullscreen", "inline"] },
       },
     },
+    design: {
+      type: "object",
+      additionalProperties: false,
+      required: ["source", "version", "artboard"],
+      properties: {
+        source: { type: "string", minLength: 1 },
+        version: { type: "number" },
+        artboard: {
+          type: "object",
+          additionalProperties: false,
+          required: ["id", "width", "height"],
+          properties: {
+            id: { type: "string", minLength: 1 },
+            name: { type: "string" },
+            width: { type: "number", minimum: 1 },
+            height: { type: "number", minimum: 1 },
+          },
+        },
+        breakpoints: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "width", "height"],
+            properties: {
+              id: { type: "string", minLength: 1 },
+              width: { type: "number", minimum: 1 },
+              height: { type: "number", minimum: 1 },
+              scale: { type: "number" },
+            },
+          },
+        },
+      },
+    },
     document: {
       type: "object",
       additionalProperties: false,

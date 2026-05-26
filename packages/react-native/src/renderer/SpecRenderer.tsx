@@ -1,8 +1,15 @@
-import { useMemo } from "react";
-import { Linking, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Linking, PixelRatio, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
 import WebView, { type WebViewMessageEvent, type WebViewNavigation } from "react-native-webview";
 import type { PaywallSpec, ProductSpec } from "@tranzmit/shared";
 import type { PresentationMode } from "../types.js";
+
+let useSafeAreaInsets: undefined | (() => { top: number; bottom: number; left: number; right: number });
+try {
+  useSafeAreaInsets = require("react-native-safe-area-context").useSafeAreaInsets;
+} catch {
+  useSafeAreaInsets = undefined;
+}
 
 export interface SpecRendererProps {
   spec: PaywallSpec;
@@ -17,7 +24,14 @@ export function SpecRenderer({
   onCTA,
   onDismiss,
 }: SpecRendererProps) {
-  const html = useMemo(() => composeDocument(spec, presentation), [presentation, spec]);
+  const windowSize = useWindowDimensions();
+  const insets = useSafeAreaInsets ? useSafeAreaInsets() : { top: 0, bottom: 0, left: 0, right: 0 };
+  const [layout, setLayout] = useState<{ width: number; height: number } | undefined>();
+  const viewport = useMemo(
+    () => viewportFromNativeLayout(presentation, windowSize, layout, insets),
+    [insets.bottom, insets.left, insets.right, insets.top, layout, presentation, windowSize.height, windowSize.width],
+  );
+  const html = useMemo(() => composeDocument(spec, presentation, viewport), [presentation, spec, viewport]);
 
   const handleMessage = (event: WebViewMessageEvent) => {
     const raw = event.nativeEvent.data;
@@ -54,8 +68,27 @@ export function SpecRenderer({
     return false;
   };
 
+  const handleLayout = (event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    if (width <= 0 || height <= 0) return;
+    setLayout((current) => {
+      if (current && Math.abs(current.width - width) < 0.5 && Math.abs(current.height - height) < 0.5) {
+        return current;
+      }
+      return { width, height };
+    });
+  };
+
   return (
-    <View style={{ width: "100%", height: heightForPresentation(presentation), overflow: "hidden", borderRadius: presentation === "inline" || presentation === "fullscreen" ? 0 : 28 }}>
+    <View
+      onLayout={handleLayout}
+      style={{
+        width: "100%",
+        height: heightForPresentation(presentation),
+        overflow: "hidden",
+        borderRadius: presentation === "inline" || presentation === "fullscreen" ? 0 : 28,
+      }}
+    >
       <WebView
         originWhitelist={["*"]}
         source={{ html, baseUrl: spec.document?.baseUrl }}
@@ -66,7 +99,7 @@ export function SpecRenderer({
         showsVerticalScrollIndicator={false}
         showsHorizontalScrollIndicator={false}
         automaticallyAdjustContentInsets={false}
-        style={{ backgroundColor: "transparent" }}
+        style={{ width: "100%", height: "100%", backgroundColor: "transparent" }}
       />
     </View>
   );
@@ -74,9 +107,7 @@ export function SpecRenderer({
 
 function heightForPresentation(presentation: PresentationMode) {
   if (presentation === "inline") return 560;
-  if (presentation === "fullscreen") return "100%";
-  if (presentation === "modal") return "86%";
-  return "82%";
+  return "100%";
 }
 
 function defaultProduct(spec: PaywallSpec) {
@@ -102,28 +133,50 @@ function isAllowed(spec: PaywallSpec, type: string) {
   return allowed.includes(type as any);
 }
 
-export function composeDocumentForTest(spec: PaywallSpec, presentation: PresentationMode = "sheet") {
-  return composeDocument(spec, presentation);
+export interface PaywallViewportContract {
+  width: number;
+  height: number;
+  safeTop: number;
+  safeBottom: number;
+  safeLeft: number;
+  safeRight: number;
+  pixelRatio: number;
+  scale: number;
+  presentation: PresentationMode;
 }
 
-function composeDocument(spec: PaywallSpec, presentation: PresentationMode) {
+export function composeDocumentForTest(
+  spec: PaywallSpec,
+  presentation: PresentationMode = "sheet",
+  viewport?: PaywallViewportContract,
+) {
+  return composeDocument(spec, presentation, viewport);
+}
+
+function composeDocument(spec: PaywallSpec, presentation: PresentationMode, viewport?: PaywallViewportContract) {
   const document = spec.document || legacyDocument(spec);
   const js = document.js ? `<script>${document.js}</script>` : "";
   const presentationClass = `tz-presentation-${presentation}`;
+  const resolvedViewport = viewport || fallbackViewport(presentation);
+  const viewportJson = JSON.stringify(resolvedViewport).replace(/</g, "\\u003c");
+  const viewportCss = viewportCssVariables(resolvedViewport);
   return `<!doctype html>
 <html class="${presentationClass}" data-tranzmit-presentation="${presentation}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <style>
-  html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; background: transparent; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
-  body { min-height: 100svh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  :root {
+${viewportCss}
+  }
+  html, body { margin: 0; padding: 0; width: var(--tz-vw); min-height: var(--tz-vh); background: transparent; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  body { min-height: var(--tz-vh); overflow-y: auto; -webkit-overflow-scrolling: touch; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   button, a { touch-action: manipulation; }
   ${document.css || ""}
-  html, body { max-width: 100vw; overflow-x: hidden !important; }
+  html, body { max-width: var(--tz-vw); overflow-x: hidden !important; }
   .tz-paywall, .tranzmit-paywall {
-    max-width: 100vw;
+    max-width: var(--tz-vw);
     overflow-x: hidden !important;
     overflow-y: auto !important;
   }
@@ -133,18 +186,23 @@ function composeDocument(spec: PaywallSpec, presentation: PresentationMode) {
   }
   .tz-presentation-fullscreen,
   .tz-presentation-fullscreen body {
-    width: 100%;
-    height: 100%;
-    min-height: 100svh;
+    width: var(--tz-vw);
+    height: var(--tz-vh);
+    min-height: var(--tz-vh);
     overflow: hidden;
   }
   .tz-presentation-fullscreen .tz-paywall,
   .tz-presentation-fullscreen .tranzmit-paywall {
-    width: 100vw !important;
-    min-height: 100svh !important;
+    width: var(--tz-vw) !important;
+    min-height: var(--tz-vh) !important;
     margin: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+  }
+  .tz-presentation-fullscreen .cta {
+    left: calc(var(--tz-safe-left) + clamp(14px, 4vw, 22px)) !important;
+    right: calc(var(--tz-safe-right) + clamp(14px, 4vw, 22px)) !important;
+    bottom: calc(var(--tz-safe-bottom) + clamp(10px, 3vw, 18px)) !important;
   }
   .tz-presentation-fullscreen .tz-close,
   .tz-presentation-fullscreen .close {
@@ -157,18 +215,20 @@ function composeDocument(spec: PaywallSpec, presentation: PresentationMode) {
     border-radius: clamp(20px, 7vw, 28px);
   }
   h1, h2, h3, p, strong, span, button, a { overflow-wrap: anywhere; }
-  @supports (min-height: 100dvh) { body { min-height: 100dvh; } }
 </style>
 </head>
 <body class="${presentationClass}">
 ${document.html}
 ${js}
+<script>window.TranzmitNativeViewport = ${viewportJson};</script>
 <script>
 (function(){
+  var viewport = window.TranzmitNativeViewport || null;
   function post(message){
     try { window.ReactNativeWebView.postMessage(JSON.stringify(message)); } catch (_) {}
   }
   window.Tranzmit = {
+    viewport: viewport,
     post: post,
     cta: function(productId){ post({ type: 'cta', productId: productId }); },
     dismiss: function(){ post({ type: 'dismiss' }); },
@@ -196,6 +256,63 @@ ${js}
 </script>
 </body>
 </html>`;
+}
+
+function viewportFromNativeLayout(
+  presentation: PresentationMode,
+  windowSize: { width: number; height: number },
+  layout?: { width: number; height: number },
+  safeArea: { top: number; bottom: number; left: number; right: number } = { top: 0, bottom: 0, left: 0, right: 0 },
+): PaywallViewportContract {
+  const width = positive(layout?.width) || positive(windowSize.width) || 390;
+  const height = positive(layout?.height) || heightFromPresentation(presentation, positive(windowSize.height) || 844);
+  const widthScale = width / 390;
+  const heightScale = height / 844;
+  return {
+    width,
+    height,
+    safeTop: safeArea.top,
+    safeBottom: safeArea.bottom,
+    safeLeft: safeArea.left,
+    safeRight: safeArea.right,
+    pixelRatio: PixelRatio.get(),
+    scale: clamp(Math.min(widthScale, heightScale), 0.82, 1.12),
+    presentation,
+  };
+}
+
+function fallbackViewport(presentation: PresentationMode): PaywallViewportContract {
+  return viewportFromNativeLayout(presentation, { width: 390, height: 844 });
+}
+
+function viewportCssVariables(viewport: PaywallViewportContract) {
+  return [
+    `  --tz-container-width: ${viewport.width.toFixed(2)}px;`,
+    `  --tz-container-height: ${viewport.height.toFixed(2)}px;`,
+    `  --tz-vw: ${viewport.width.toFixed(2)}px;`,
+    `  --tz-vh: ${viewport.height.toFixed(2)}px;`,
+    `  --tz-safe-top: ${viewport.safeTop.toFixed(2)}px;`,
+    `  --tz-safe-bottom: ${viewport.safeBottom.toFixed(2)}px;`,
+    `  --tz-safe-left: ${viewport.safeLeft.toFixed(2)}px;`,
+    `  --tz-safe-right: ${viewport.safeRight.toFixed(2)}px;`,
+    `  --tz-device-pixel-ratio: ${viewport.pixelRatio.toFixed(3)};`,
+    `  --tz-scale: ${viewport.scale.toFixed(4)};`,
+  ].join("\n");
+}
+
+function heightFromPresentation(presentation: PresentationMode, height: number) {
+  if (presentation === "inline") return height * 0.72;
+  if (presentation === "fullscreen") return height;
+  if (presentation === "modal") return height * 0.9;
+  return height * 0.86;
+}
+
+function positive(value: number | undefined) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function legacyDocument(spec: PaywallSpec) {

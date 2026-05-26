@@ -18,6 +18,7 @@ function host(tag: string) {
     delete domProps.transparent;
     delete domProps.animationType;
     delete domProps.onRequestClose;
+    delete domProps.onLayout;
     if (domProps.onPress) {
       domProps.onClick = domProps.onPress;
       delete domProps.onPress;
@@ -52,4 +53,6 @@ export const Pressable = host("button");
 export const TouchableOpacity = host("button");
 export const Modal = ({ visible, children }: any) => (visible ? React.createElement("div", null, children) : null);
 export const Dimensions = { get: () => ({ width: 390, height: 844 }) };
+export const PixelRatio = { get: () => 3 };
+export const useWindowDimensions = () => ({ width: 390, height: 844, scale: 3, fontScale: 1 });
 export const StyleSheet = { create: <T extends Record<string, any>>(styles: T) => styles };

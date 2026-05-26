@@ -116,8 +116,7 @@ class ProductSpec {
       badge: json['badge'] as String?,
       features: _stringList(json['features']),
       isDefault: json['isDefault'] as bool?,
-      metadata:
-          json['metadata'] == null ? null : _stringMap(json['metadata']),
+      metadata: json['metadata'] == null ? null : _stringMap(json['metadata']),
       highlighted: json['highlighted'] as bool?,
     );
   }
@@ -153,7 +152,8 @@ class CtaSpec {
     );
   }
 
-  Object toJson() => subtext == null ? text : {'text': text, 'subtext': subtext};
+  Object toJson() =>
+      subtext == null ? text : {'text': text, 'subtext': subtext};
 }
 
 class PaywallHeaderSpec {
@@ -303,6 +303,7 @@ class PaywallSpec {
     this.revision,
     this.cacheKey,
     this.presentationMode,
+    this.design,
     this.bridge,
     this.header,
     this.headline,
@@ -326,6 +327,7 @@ class PaywallSpec {
   final Object? revision;
   final String? cacheKey;
   final String? presentationMode;
+  final JsonMap? design;
   final WebViewBridgeSpec? bridge;
   final PaywallHeaderSpec? header;
   final String? headline;
@@ -356,6 +358,9 @@ class PaywallSpec {
       revision: json['revision'],
       cacheKey: json['cacheKey'] as String?,
       presentationMode: _presentationMode(json['presentation']),
+      design: json['design'] == null
+          ? null
+          : Map<String, dynamic>.from(json['design'] as Map),
       bridge: json['bridge'] == null
           ? null
           : WebViewBridgeSpec.fromJson(
@@ -406,7 +411,9 @@ class PaywallSpec {
         if (templateId != null) 'templateId': templateId,
         if (revision != null) 'revision': revision,
         if (cacheKey != null) 'cacheKey': cacheKey,
-        if (presentationMode != null) 'presentation': {'mode': presentationMode},
+        if (presentationMode != null)
+          'presentation': {'mode': presentationMode},
+        if (design != null) 'design': design,
         if (bridge != null) 'bridge': bridge!.toJson(),
         if (header != null) 'header': header!.toJson(),
         if (headline != null) 'headline': headline,
@@ -464,7 +471,8 @@ class PlacementConfig {
       placementId: (json['placementId'] ?? json['placement_id']) as String?,
       variantId: json['variantId'] as String,
       variantKey: (json['variantKey'] ?? json['variant_key']) as String?,
-      spec: PaywallSpec.fromJson(Map<String, dynamic>.from(json['spec'] as Map)),
+      spec:
+          PaywallSpec.fromJson(Map<String, dynamic>.from(json['spec'] as Map)),
     );
   }
 

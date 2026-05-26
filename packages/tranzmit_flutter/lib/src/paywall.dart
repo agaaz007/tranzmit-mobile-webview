@@ -75,7 +75,8 @@ class _TranzmitPaywallState extends State<TranzmitPaywall> {
     if (spec == null) return const SizedBox.shrink();
 
     final trigger = widget.trigger ?? 'dynamic_spec';
-    final variantId = widget.spec == null ? placement?.variantId : widget.variantId;
+    final variantId =
+        widget.spec == null ? placement?.variantId : widget.variantId;
     final impressionKey =
         '$trigger:${variantId ?? 'none'}:${spec.cacheKey ?? spec.revision ?? 'none'}';
 
@@ -161,18 +162,6 @@ class _PresentedSpec extends StatelessWidget {
       );
     }
 
-    final child = Material(
-      color: Colors.transparent,
-      child: SafeArea(
-        child: SpecRenderer(
-          spec: spec,
-          presentation: presentation,
-          onCTA: onCTA,
-          onDismiss: onDismiss,
-        ),
-      ),
-    );
-
     if (presentation == PresentationMode.fullscreen) {
       return Positioned.fill(
         child: Material(
@@ -190,7 +179,8 @@ class _PresentedSpec extends StatelessWidget {
               SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.all(8),
-                  child: _FullscreenCloseButton(spec: spec, onDismiss: onDismiss),
+                  child:
+                      _FullscreenCloseButton(spec: spec, onDismiss: onDismiss),
                 ),
               ),
             ],
@@ -204,8 +194,23 @@ class _PresentedSpec extends StatelessWidget {
         child: Container(
           color: Colors.black.withValues(alpha: 0.45),
           padding: const EdgeInsets.all(24),
-          alignment: Alignment.center,
-          child: child,
+          child: SafeArea(
+            child: Center(
+              child: FractionallySizedBox(
+                heightFactor: 0.90,
+                widthFactor: 1,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: SpecRenderer(
+                    spec: spec,
+                    presentation: presentation,
+                    onCTA: onCTA,
+                    onDismiss: onDismiss,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       );
     }
@@ -219,9 +224,21 @@ class _PresentedSpec extends StatelessWidget {
           alignment: Alignment.bottomCenter,
           child: GestureDetector(
             onTap: () {},
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: child,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: FractionallySizedBox(
+                  heightFactor: 0.86,
+                  widthFactor: 1,
+                  child: SpecRenderer(
+                    spec: spec,
+                    presentation: presentation,
+                    onCTA: onCTA,
+                    onDismiss: onDismiss,
+                  ),
+                ),
+              ),
             ),
           ),
         ),

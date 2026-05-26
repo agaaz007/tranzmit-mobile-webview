@@ -31,6 +31,23 @@ declare module "react-native" {
   export const Dimensions: {
     get(name: "window" | "screen"): { width: number; height: number };
   };
+  export const PixelRatio: {
+    get(): number;
+  };
+  export function useWindowDimensions(): {
+    width: number;
+    height: number;
+    scale: number;
+    fontScale: number;
+  };
+  export interface LayoutChangeEvent {
+    nativeEvent: {
+      layout: {
+        width: number;
+        height: number;
+      };
+    };
+  }
 }
 
 declare module "react-native-webview" {

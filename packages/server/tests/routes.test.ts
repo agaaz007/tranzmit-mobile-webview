@@ -123,6 +123,8 @@ describe("GET /config", () => {
     expect(config.placements.onboarding.spec.document?.css).toContain("overflow-y:auto");
     expect(config.placements.onboarding.spec.document?.css).toContain("position:fixed");
     expect(config.placements.onboarding.spec.document?.css).not.toContain("overflow:hidden");
+    expect(config.placements.onboarding.spec.document?.css).toContain("var(--tz-vh");
+    expect(config.placements.onboarding.spec.document?.css).toContain("var(--tz-safe-bottom");
     expect(config.placements.onboarding.spec.presentation?.mode).toBe("sheet");
     expect(config.placements.onboarding.spec.document?.css).toContain("tz-presentation-fullscreen");
     expect(config.placements.onboarding.spec.document?.css).toContain("border-radius:0!important");

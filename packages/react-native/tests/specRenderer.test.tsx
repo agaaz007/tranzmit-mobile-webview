@@ -37,13 +37,27 @@ describe("SpecRenderer", () => {
   });
 
   it("injects presentation-aware fullscreen document styles", () => {
-    const html = composeDocumentForTest(baseSpec, "fullscreen");
+    const html = composeDocumentForTest(baseSpec, "fullscreen", {
+      width: 412,
+      height: 915,
+      safeTop: 24,
+      safeBottom: 18,
+      safeLeft: 0,
+      safeRight: 0,
+      pixelRatio: 2.75,
+      scale: 1.06,
+      presentation: "fullscreen",
+    });
 
     expect(html).toContain("tz-presentation-fullscreen");
     expect(html).toContain('data-tranzmit-presentation="fullscreen"');
+    expect(html).toContain("--tz-vh: 915.00px");
+    expect(html).toContain("--tz-safe-bottom: 18.00px");
+    expect(html).toContain('"pixelRatio":2.75');
     expect(html).toContain("border-radius: 0 !important");
-    expect(html).toContain("width: 100vw !important");
+    expect(html).toContain("width: var(--tz-vw) !important");
     expect(html).toContain(".tz-presentation-fullscreen .tz-close");
     expect(html).toContain("display: none !important");
+    expect(html).toContain("window.TranzmitNativeViewport");
   });
 });

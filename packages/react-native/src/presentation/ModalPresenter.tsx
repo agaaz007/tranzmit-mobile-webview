@@ -41,11 +41,8 @@ export function ModalPresenter({
             top: 0,
           }}
         />
-        <SafeAreaView style={fullscreen
-          ? { flex: 1, backgroundColor: "#000" }
-          : { flex: 1, justifyContent: "center", paddingHorizontal: 18, paddingVertical: 12 }}
-        >
-          {fullscreen ? (
+        {fullscreen ? (
+          <View style={{ flex: 1, backgroundColor: "#000" }}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Dismiss paywall"
@@ -66,9 +63,15 @@ export function ModalPresenter({
             >
               <Text style={{ color: "#6f6878", fontSize: 28, lineHeight: 32 }}>×</Text>
             </Pressable>
-          ) : null}
-          {children}
-        </SafeAreaView>
+            {children}
+          </View>
+        ) : (
+          <SafeAreaView style={{ flex: 1, justifyContent: "center", paddingHorizontal: 18, paddingVertical: 12 }}>
+            <View style={{ alignSelf: "center", height: "90%", maxWidth: 440, width: "100%" }}>
+              {children}
+            </View>
+          </SafeAreaView>
+        )}
       </View>
     </Modal>
   );

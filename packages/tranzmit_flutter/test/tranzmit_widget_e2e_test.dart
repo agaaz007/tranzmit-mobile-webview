@@ -15,7 +15,8 @@ const _baseSpec = {
     'subtitle': 'Get unlimited exports',
   },
   'document': {
-    'html': '<main><h1>Unlock Pro</h1><button data-tranzmit-action="cta" data-product-id="pro_monthly">Start Free Trial</button></main>',
+    'html':
+        '<main><h1>Unlock Pro</h1><button data-tranzmit-action="cta" data-product-id="pro_monthly">Start Free Trial</button></main>',
     'css': 'body{font-family:sans-serif}',
   },
   'bridge': {
@@ -73,13 +74,27 @@ void main() {
     final html = composePaywallDocumentForTest(
       spec,
       presentation: PresentationMode.fullscreen,
+      viewport: const PaywallViewport(
+        width: 412,
+        height: 915,
+        safeTop: 24,
+        safeBottom: 18,
+        safeLeft: 0,
+        safeRight: 0,
+        pixelRatio: 2.75,
+        presentation: PresentationMode.fullscreen,
+      ),
     );
 
     expect(html, contains('tz-presentation-fullscreen'));
     expect(html, contains('data-tranzmit-presentation="fullscreen"'));
+    expect(html, contains('--tz-vh: 915.00px'));
+    expect(html, contains('--tz-safe-bottom: 18.00px'));
+    expect(html, contains('"pixelRatio":2.75'));
     expect(html, contains('border-radius: 0 !important'));
-    expect(html, contains('width: 100vw !important'));
+    expect(html, contains('width: var(--tz-vw) !important'));
     expect(html, contains('.tz-presentation-fullscreen .tz-close'));
     expect(html, contains('display: none !important'));
+    expect(html, contains('window.TranzmitNativeViewport'));
   });
 }

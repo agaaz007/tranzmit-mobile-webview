@@ -36,9 +36,9 @@ export function SheetPresenter({
             enablePanDownToClose
             index={0}
             onClose={onDismiss}
-            snapPoints={["60%", "90%"]}
+            snapPoints={["86%", "96%"]}
           >
-            <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>{children}</View>
+            <View style={{ height: "100%", paddingHorizontal: 16, paddingBottom: 20 }}>{children}</View>
           </BottomSheet>
         </View>
       </Modal>
@@ -61,7 +61,7 @@ export function SheetPresenter({
             top: 0,
           }}
         />
-        <View style={{ padding: 12 }}>{children}</View>
+        <View style={{ height: "86%", padding: 12 }}>{children}</View>
       </View>
     </Modal>
   );

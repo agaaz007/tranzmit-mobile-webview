@@ -26,11 +26,12 @@ class SpecRenderer extends StatefulWidget {
 
 class _SpecRendererState extends State<SpecRenderer> {
   late final WebViewController _controller;
+  String? _lastLoadedSignature;
 
   @override
   void initState() {
     super.initState();
-    _controller = _buildController(widget.spec);
+    _controller = _buildController();
   }
 
   @override
@@ -39,15 +40,14 @@ class _SpecRendererState extends State<SpecRenderer> {
     if (oldWidget.presentation != widget.presentation ||
         oldWidget.spec.cacheKey != widget.spec.cacheKey ||
         oldWidget.spec.revision != widget.spec.revision ||
-        oldWidget.spec.document?.html != widget.spec.document?.html) {
-      _controller.loadHtmlString(
-        _composeDocument(widget.spec, widget.presentation),
-        baseUrl: widget.spec.document?.baseUrl,
-      );
+        oldWidget.spec.document?.html != widget.spec.document?.html ||
+        oldWidget.spec.document?.css != widget.spec.document?.css ||
+        oldWidget.spec.document?.js != widget.spec.document?.js) {
+      _lastLoadedSignature = null;
     }
   }
 
-  WebViewController _buildController(PaywallSpec spec) {
+  WebViewController _buildController() {
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.transparent)
@@ -56,8 +56,11 @@ class _SpecRendererState extends State<SpecRenderer> {
           onNavigationRequest: (request) {
             final uri = Uri.tryParse(request.url);
             if (uri == null) return NavigationDecision.prevent;
-            if (uri.scheme == 'about' || uri.scheme == 'data') return NavigationDecision.navigate;
-            _handleBridgeMessage(jsonEncode({'type': 'open_url', 'url': request.url}));
+            if (uri.scheme == 'about' || uri.scheme == 'data') {
+              return NavigationDecision.navigate;
+            }
+            _handleBridgeMessage(
+                jsonEncode({'type': 'open_url', 'url': request.url}));
             return NavigationDecision.prevent;
           },
         ),
@@ -66,11 +69,6 @@ class _SpecRendererState extends State<SpecRenderer> {
         'TranzmitBridge',
         onMessageReceived: (message) => _handleBridgeMessage(message.message),
       );
-
-    controller.loadHtmlString(
-      _composeDocument(spec, widget.presentation),
-      baseUrl: spec.document?.baseUrl,
-    );
     return controller;
   }
 
@@ -102,7 +100,8 @@ class _SpecRendererState extends State<SpecRenderer> {
     if (type == 'cta_click') return true;
     final allowed = widget.spec.bridge?.allowedActions;
     if (allowed == null || allowed.isEmpty) {
-      return const {'cta', 'dismiss', 'custom_action', 'open_url', 'ready'}.contains(type);
+      return const {'cta', 'dismiss', 'custom_action', 'open_url', 'ready'}
+          .contains(type);
     }
     return allowed.contains(type) || type == 'ready';
   }
@@ -121,6 +120,12 @@ class _SpecRendererState extends State<SpecRenderer> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final viewport = PaywallViewport.fromContext(
+          context,
+          constraints,
+          widget.presentation,
+        );
+        _scheduleDocumentLoad(viewport);
         final radius = widget.presentation == PresentationMode.inline ||
                 widget.presentation == PresentationMode.fullscreen
             ? 0.0
@@ -128,13 +133,44 @@ class _SpecRendererState extends State<SpecRenderer> {
         return ClipRRect(
           borderRadius: BorderRadius.circular(radius),
           child: SizedBox(
-            width: double.infinity,
-            height: _heightFor(context, constraints.maxHeight),
+            width: viewport.width,
+            height: viewport.height,
             child: WebViewWidget(controller: _controller),
           ),
         );
       },
     );
+  }
+
+  void _scheduleDocumentLoad(PaywallViewport viewport) {
+    final signature =
+        _documentSignature(widget.spec, widget.presentation, viewport);
+    if (_lastLoadedSignature == signature) return;
+    _lastLoadedSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _lastLoadedSignature != signature) return;
+      _controller.loadHtmlString(
+        _composeDocument(widget.spec, widget.presentation, viewport: viewport),
+        baseUrl: widget.spec.document?.baseUrl,
+      );
+    });
+  }
+
+  String _documentSignature(
+    PaywallSpec spec,
+    PresentationMode presentation,
+    PaywallViewport viewport,
+  ) {
+    return [
+      presentation.name,
+      spec.cacheKey,
+      spec.revision,
+      spec.document?.baseUrl,
+      spec.document?.html,
+      spec.document?.css,
+      spec.document?.js,
+      viewport.signature,
+    ].join('|');
   }
 
   double _heightFor(BuildContext context, [double? availableHeight]) {
@@ -152,6 +188,130 @@ class _SpecRendererState extends State<SpecRenderer> {
       case PresentationMode.sheet:
         return height * 0.86;
     }
+  }
+}
+
+@visibleForTesting
+class PaywallViewport {
+  const PaywallViewport({
+    required this.width,
+    required this.height,
+    required this.safeTop,
+    required this.safeBottom,
+    required this.safeLeft,
+    required this.safeRight,
+    required this.pixelRatio,
+    required this.presentation,
+  });
+
+  final double width;
+  final double height;
+  final double safeTop;
+  final double safeBottom;
+  final double safeLeft;
+  final double safeRight;
+  final double pixelRatio;
+  final PresentationMode presentation;
+
+  factory PaywallViewport.fromContext(
+    BuildContext context,
+    BoxConstraints constraints,
+    PresentationMode presentation,
+  ) {
+    final media = MediaQuery.maybeOf(context);
+    final size = media?.size ?? const Size(390, 844);
+    final padding = media?.padding ?? EdgeInsets.zero;
+    final pixelRatio = media?.devicePixelRatio ?? 1;
+    final constrainedWidth =
+        constraints.maxWidth.isFinite && constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : size.width;
+    final constrainedHeight =
+        constraints.maxHeight.isFinite && constraints.maxHeight > 0
+            ? constraints.maxHeight
+            : _fallbackHeight(size.height, presentation);
+
+    return PaywallViewport(
+      width: constrainedWidth,
+      height: constrainedHeight,
+      safeTop: padding.top,
+      safeBottom: padding.bottom,
+      safeLeft: padding.left,
+      safeRight: padding.right,
+      pixelRatio: pixelRatio,
+      presentation: presentation,
+    );
+  }
+
+  factory PaywallViewport.fallback(PresentationMode presentation) {
+    return PaywallViewport(
+      width: 390,
+      height: _fallbackHeight(844, presentation),
+      safeTop: 0,
+      safeBottom: 0,
+      safeLeft: 0,
+      safeRight: 0,
+      pixelRatio: 3,
+      presentation: presentation,
+    );
+  }
+
+  String get signature => [
+        width.toStringAsFixed(1),
+        height.toStringAsFixed(1),
+        safeTop.toStringAsFixed(1),
+        safeBottom.toStringAsFixed(1),
+        safeLeft.toStringAsFixed(1),
+        safeRight.toStringAsFixed(1),
+        pixelRatio.toStringAsFixed(2),
+        presentation.name,
+      ].join(':');
+
+  String get cssVariables => '''
+  --tz-container-width: ${width.toStringAsFixed(2)}px;
+  --tz-container-height: ${height.toStringAsFixed(2)}px;
+  --tz-vw: ${width.toStringAsFixed(2)}px;
+  --tz-vh: ${height.toStringAsFixed(2)}px;
+  --tz-safe-top: ${safeTop.toStringAsFixed(2)}px;
+  --tz-safe-bottom: ${safeBottom.toStringAsFixed(2)}px;
+  --tz-safe-left: ${safeLeft.toStringAsFixed(2)}px;
+  --tz-safe-right: ${safeRight.toStringAsFixed(2)}px;
+  --tz-device-pixel-ratio: ${pixelRatio.toStringAsFixed(3)};
+  --tz-scale: ${scale.toStringAsFixed(4)};
+''';
+
+  double get scale {
+    final widthScale = width / 390;
+    final heightScale = height / 844;
+    final raw = widthScale < heightScale ? widthScale : heightScale;
+    if (raw < 0.82) return 0.82;
+    if (raw > 1.12) return 1.12;
+    return raw;
+  }
+
+  Map<String, Object> toJson() => {
+        'width': width,
+        'height': height,
+        'safeTop': safeTop,
+        'safeBottom': safeBottom,
+        'safeLeft': safeLeft,
+        'safeRight': safeRight,
+        'pixelRatio': pixelRatio,
+        'scale': scale,
+        'presentation': presentation.name,
+      };
+}
+
+double _fallbackHeight(double mediaHeight, PresentationMode presentation) {
+  switch (presentation) {
+    case PresentationMode.inline:
+      return mediaHeight * 0.72;
+    case PresentationMode.modal:
+      return mediaHeight * 0.90;
+    case PresentationMode.fullscreen:
+      return mediaHeight;
+    case PresentationMode.sheet:
+      return mediaHeight * 0.86;
   }
 }
 
@@ -195,11 +355,16 @@ ProductSpec? productForWebViewBridgeMessage(
 String composePaywallDocumentForTest(
   PaywallSpec spec, {
   PresentationMode presentation = PresentationMode.sheet,
+  PaywallViewport? viewport,
 }) {
-  return _composeDocument(spec, presentation);
+  return _composeDocument(spec, presentation, viewport: viewport);
 }
 
-String _composeDocument(PaywallSpec spec, PresentationMode presentation) {
+String _composeDocument(
+  PaywallSpec spec,
+  PresentationMode presentation, {
+  PaywallViewport? viewport,
+}) {
   final document = spec.document;
   final html = document?.html;
   if (document == null || html == null || html.isEmpty) {
@@ -209,10 +374,12 @@ String _composeDocument(PaywallSpec spec, PresentationMode presentation) {
   const bootstrap = '''
 <script>
 (function(){
+  var viewport = window.TranzmitNativeViewport || null;
   function post(message){
     try { window.TranzmitBridge.postMessage(JSON.stringify(message)); } catch (_) {}
   }
   window.Tranzmit = {
+    viewport: viewport,
     post: post,
     cta: function(productId){ post({ type: 'cta', productId: productId }); },
     dismiss: function(){ post({ type: 'dismiss' }); },
@@ -241,6 +408,8 @@ String _composeDocument(PaywallSpec spec, PresentationMode presentation) {
 ''';
 
   final presentationClass = 'tz-presentation-${presentation.name}';
+  final resolvedViewport = viewport ?? PaywallViewport.fallback(presentation);
+  final viewportJson = jsonEncode(resolvedViewport.toJson());
 
   return '''<!doctype html>
 <html class="$presentationClass" data-tranzmit-presentation="${presentation.name}">
@@ -248,16 +417,19 @@ String _composeDocument(PaywallSpec spec, PresentationMode presentation) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <style>
-  html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; background: transparent; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
-  body { min-height: 100svh; }
+  :root {
+${resolvedViewport.cssVariables}
+  }
+  html, body { margin: 0; padding: 0; width: var(--tz-vw); min-height: var(--tz-vh); background: transparent; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  body { min-height: var(--tz-vh); }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   button, a { touch-action: manipulation; }
   img, svg, video, canvas { max-width: 100%; height: auto; }
 ${document.css ?? ''}
-  html, body { max-width: 100vw; overflow-x: hidden !important; }
+  html, body { max-width: var(--tz-vw); overflow-x: hidden !important; }
   body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .tz-paywall, .tranzmit-paywall {
-    max-width: 100vw;
+    max-width: var(--tz-vw);
     overflow-x: hidden !important;
     overflow-y: auto !important;
   }
@@ -267,22 +439,23 @@ ${document.css ?? ''}
   }
   .tz-presentation-fullscreen,
   .tz-presentation-fullscreen body {
-    width: 100%;
-    height: 100%;
-    min-height: 100svh;
+    width: var(--tz-vw);
+    height: var(--tz-vh);
+    min-height: var(--tz-vh);
     overflow: hidden;
   }
   .tz-presentation-fullscreen .tz-paywall,
   .tz-presentation-fullscreen .tranzmit-paywall {
-    width: 100vw !important;
-    min-height: 100svh !important;
+    width: var(--tz-vw) !important;
+    min-height: var(--tz-vh) !important;
     margin: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
   }
   .tz-presentation-fullscreen .cta {
-    left: clamp(14px, 4vw, 22px) !important;
-    right: clamp(14px, 4vw, 22px) !important;
+    left: calc(var(--tz-safe-left) + clamp(14px, 4vw, 22px)) !important;
+    right: calc(var(--tz-safe-right) + clamp(14px, 4vw, 22px)) !important;
+    bottom: calc(var(--tz-safe-bottom) + clamp(10px, 3vw, 18px)) !important;
   }
   .tz-presentation-fullscreen .tz-close,
   .tz-presentation-fullscreen .close {
@@ -295,12 +468,12 @@ ${document.css ?? ''}
     border-radius: clamp(20px, 7vw, 28px);
   }
   h1, h2, h3, p, strong, span, button, a { overflow-wrap: anywhere; }
-  @supports (min-height: 100dvh) { body { min-height: 100dvh; } }
 </style>
 </head>
 <body class="$presentationClass">
 $html
 ${document.js == null ? '' : '<script>${document.js}</script>'}
+<script>window.TranzmitNativeViewport = $viewportJson;</script>
 $bootstrap
 </body>
 </html>''';
@@ -352,11 +525,13 @@ class _MissingDocumentView extends StatelessWidget {
                 ),
                 if (cacheKey != null) ...[
                   const SizedBox(height: 12),
-                  Text('cacheKey: $cacheKey', style: const TextStyle(fontSize: 12)),
+                  Text('cacheKey: $cacheKey',
+                      style: const TextStyle(fontSize: 12)),
                 ],
                 if (documentUrl != null) ...[
                   const SizedBox(height: 4),
-                  Text('url: $documentUrl', style: const TextStyle(fontSize: 12)),
+                  Text('url: $documentUrl',
+                      style: const TextStyle(fontSize: 12)),
                 ],
               ],
             ),

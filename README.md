@@ -48,9 +48,11 @@ Supported values are `sheet` (bottom popup), `modal` (centered popup), `fullscre
 
 ## Responsive WebView Contract
 
-Every hosted paywall document must be mobile-fluid: no fixed desktop-only cards, no root `overflow:hidden`, and no typography that assumes one screen width. The server templates use `clamp()` sizing, scrollable WebView roots, and fixed bottom CTA buttons; mobile SDKs inject a final safety stylesheet so hosted documents fit Android/iOS screen sizes instead of clipping.
+The native SDK owns paywall geometry. For `fullscreen`, `sheet`, and `modal`, the native wrapper chooses the exact container size and the WebView fills that frame. The document receives a viewport contract with container width/height, safe-area insets, pixel ratio, scale, and presentation mode through `window.Tranzmit.viewport`, `window.TranzmitNativeViewport`, and CSS variables like `--tz-vh`, `--tz-safe-bottom`, `--tz-container-width`, and `--tz-scale`.
 
-Presentation mode is also passed into the WebView document as `tz-presentation-sheet`, `tz-presentation-modal`, `tz-presentation-fullscreen`, or `tz-presentation-inline` on `<html>` and `<body>`. Fullscreen removes document border radius and expands the paywall root edge-to-edge; sheet and modal preserve rounded corners inside their constrained containers.
+Server templates consume those variables instead of raw `100vh`/`100svh`, and seeded paywalls include a `design` artboard with breakpoints for `360x740`, `390x844`, `412x915`, and tablet frames. Presentation mode is also passed into the document as `tz-presentation-sheet`, `tz-presentation-modal`, `tz-presentation-fullscreen`, or `tz-presentation-inline` on `<html>` and `<body>`.
+
+For visual regression capture on Android, run `npm run test:visual:android` with an emulator open. It captures paywall screenshots at the core breakpoint sizes into `artifacts/paywall-screenshots`.
 
 ## How It Works
 
