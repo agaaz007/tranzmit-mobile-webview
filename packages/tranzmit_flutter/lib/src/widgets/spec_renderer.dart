@@ -36,11 +36,12 @@ class _SpecRendererState extends State<SpecRenderer> {
   @override
   void didUpdateWidget(covariant SpecRenderer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.spec.cacheKey != widget.spec.cacheKey ||
+    if (oldWidget.presentation != widget.presentation ||
+        oldWidget.spec.cacheKey != widget.spec.cacheKey ||
         oldWidget.spec.revision != widget.spec.revision ||
         oldWidget.spec.document?.html != widget.spec.document?.html) {
       _controller.loadHtmlString(
-        _composeDocument(widget.spec),
+        _composeDocument(widget.spec, widget.presentation),
         baseUrl: widget.spec.document?.baseUrl,
       );
     }
@@ -66,7 +67,10 @@ class _SpecRendererState extends State<SpecRenderer> {
         onMessageReceived: (message) => _handleBridgeMessage(message.message),
       );
 
-    controller.loadHtmlString(_composeDocument(spec), baseUrl: spec.document?.baseUrl);
+    controller.loadHtmlString(
+      _composeDocument(spec, widget.presentation),
+      baseUrl: spec.document?.baseUrl,
+    );
     return controller;
   }
 
@@ -115,22 +119,29 @@ class _SpecRendererState extends State<SpecRenderer> {
       );
     }
 
-    final radius = widget.presentation == PresentationMode.inline ||
-            widget.presentation == PresentationMode.fullscreen
-        ? 0.0
-        : 28.0;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: SizedBox(
-        width: double.infinity,
-        height: _heightFor(context),
-        child: WebViewWidget(controller: _controller),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final radius = widget.presentation == PresentationMode.inline ||
+                widget.presentation == PresentationMode.fullscreen
+            ? 0.0
+            : 28.0;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: SizedBox(
+            width: double.infinity,
+            height: _heightFor(context, constraints.maxHeight),
+            child: WebViewWidget(controller: _controller),
+          ),
+        );
+      },
     );
   }
 
-  double _heightFor(BuildContext context) {
-    final height = MediaQuery.maybeOf(context)?.size.height ?? 700;
+  double _heightFor(BuildContext context, [double? availableHeight]) {
+    final mediaHeight = MediaQuery.maybeOf(context)?.size.height ?? 700;
+    final height = availableHeight != null && availableHeight.isFinite
+        ? availableHeight
+        : mediaHeight;
     switch (widget.presentation) {
       case PresentationMode.inline:
         return height * 0.72;
@@ -180,7 +191,15 @@ ProductSpec? productForWebViewBridgeMessage(
   return null;
 }
 
-String _composeDocument(PaywallSpec spec) {
+@visibleForTesting
+String composePaywallDocumentForTest(
+  PaywallSpec spec, {
+  PresentationMode presentation = PresentationMode.sheet,
+}) {
+  return _composeDocument(spec, presentation);
+}
+
+String _composeDocument(PaywallSpec spec, PresentationMode presentation) {
   final document = spec.document;
   final html = document?.html;
   if (document == null || html == null || html.isEmpty) {
@@ -221,8 +240,10 @@ String _composeDocument(PaywallSpec spec) {
 </script>
 ''';
 
+  final presentationClass = 'tz-presentation-${presentation.name}';
+
   return '''<!doctype html>
-<html>
+<html class="$presentationClass" data-tranzmit-presentation="${presentation.name}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
@@ -240,11 +261,44 @@ ${document.css ?? ''}
     overflow-x: hidden !important;
     overflow-y: auto !important;
   }
+  .$presentationClass .tz-paywall,
+  .$presentationClass .tranzmit-paywall {
+    min-height: 100%;
+  }
+  .tz-presentation-fullscreen,
+  .tz-presentation-fullscreen body {
+    width: 100%;
+    height: 100%;
+    min-height: 100svh;
+    overflow: hidden;
+  }
+  .tz-presentation-fullscreen .tz-paywall,
+  .tz-presentation-fullscreen .tranzmit-paywall {
+    width: 100vw !important;
+    min-height: 100svh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .tz-presentation-fullscreen .cta {
+    left: clamp(14px, 4vw, 22px) !important;
+    right: clamp(14px, 4vw, 22px) !important;
+  }
+  .tz-presentation-fullscreen .tz-close,
+  .tz-presentation-fullscreen .close {
+    display: none !important;
+  }
+  .tz-presentation-sheet .tz-paywall,
+  .tz-presentation-sheet .tranzmit-paywall,
+  .tz-presentation-modal .tz-paywall,
+  .tz-presentation-modal .tranzmit-paywall {
+    border-radius: clamp(20px, 7vw, 28px);
+  }
   h1, h2, h3, p, strong, span, button, a { overflow-wrap: anywhere; }
   @supports (min-height: 100dvh) { body { min-height: 100dvh; } }
 </style>
 </head>
-<body>
+<body class="$presentationClass">
 $html
 ${document.js == null ? '' : '<script>${document.js}</script>'}
 $bootstrap

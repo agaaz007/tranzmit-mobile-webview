@@ -13,15 +13,15 @@ const SEED_CLIENT_ID = process.env.SEED_CLIENT_ID || "client_influish_demo";
 const SEED_PUBLIC_KEY = process.env.SEED_PUBLIC_KEY || "pk_test_2a8a5f07d4b9fcf1cc77e024";
 const SEED_SECRET_KEY = process.env.SEED_SECRET_KEY || "sk_test_influish_demo";
 const SEED_CLIENT_NAME = process.env.SEED_CLIENT_NAME || "Influish Demo";
-const SEED_REVISION = process.env.SEED_REVISION || "seed-v4";
+const SEED_REVISION = process.env.SEED_REVISION || "seed-v5";
 
-function webviewSpec({ templateId, title, subtitle, cta, product, features, socialProof, legal }) {
+function webviewSpec({ templateId, title, subtitle, cta, product, features, socialProof, legal, presentation = "sheet" }) {
   const spec = {
     renderer: "webview",
     templateId,
     revision: SEED_REVISION,
     cacheKey: `${templateId}:${SEED_REVISION}`,
-    presentation: { mode: "sheet" },
+    presentation: { mode: presentation },
     header: { title, subtitle, alignment: "center" },
     cta: { text: cta },
     products: [product],
@@ -48,6 +48,59 @@ function webviewSpec({ templateId, title, subtitle, cta, product, features, soci
 function buildHtml(spec) {
   const product = spec.products[0];
   const features = spec.features || [];
+  if (spec.templateId === "influish_intro_offer") {
+    const introPriceLabel = escapeHtml(product.name).replace(/(₹[0-9,]+)/, "<span>$1</span>");
+    const featureHtml = features.map((feature, index) => {
+      const icon = ["•••", "▣", "✦", "◆"][index % 4];
+      return `<li><span class="icon">${icon}</span><span>${escapeHtml(feature.text)}</span><b>›</b></li>`;
+    }).join("");
+    return `<main class="tz-paywall ${spec.templateId}">
+      <button class="tz-close tz-close-right" data-tranzmit-action="dismiss" aria-label="Close">×</button>
+      <section class="brand intro-brand"><span class="mark">In</span><strong>Influish</strong><em>PRO</em></section>
+      <h1>Unlock More Collabs.<br><span>Earn More.</span></h1>
+      <p class="subtitle">${escapeHtml(spec.header.subtitle || "")}</p>
+      <section class="offer intro-offer">
+        ${product.badge ? `<div class="badge">✦ ${escapeHtml(product.badge)} ✦</div>` : ""}
+        <div class="price-row intro-price"><strong>${introPriceLabel}</strong></div>
+        <p class="price-sub">${escapeHtml(product.price)}</p>
+        <div class="offer-divider"></div>
+        ${product.description ? `<p class="monthly"><span>₹</span>${escapeHtml(product.description.replace(/^Just\s*/i, ""))}</p>` : ""}
+      </section>
+      <section class="creator-proof">
+        <div class="avatars"><span></span><span></span><span></span><b>99+</b></div>
+        <p>Trusted by <strong>8,20,737+</strong> creators<br><strong>₹2.3 Cr+</strong> paid out this year</p>
+      </section>
+      <section class="feature-panel"><h2>Why creators upgrade</h2><ul class="features">${featureHtml}</ul></section>
+      <section class="testimonial intro-testimonial"><span class="avatar avatar-ananya"></span><div><strong>${escapeHtml(product.metadata?.testimonialName || "Ananya")} <small>· ${escapeHtml(product.metadata?.testimonialFollowers || "31K followers")}</small></strong><p>★★★★★</p><em>${escapeHtml(product.metadata?.testimonialText || "")}</em></div></section>
+      <section class="legal-row"><span>▣ No hidden charges</span><span>↻ Cancel anytime</span><span>◇ Secure checkout</span></section>
+      <button class="cta" data-tranzmit-action="cta" data-product-id="${escapeHtml(product.id)}">${escapeHtml(typeof spec.cta === "string" ? spec.cta : spec.cta.text)} <span>✦</span></button>
+    </main>`;
+  }
+  if (spec.templateId === "influish_annual_pro") {
+    const featureHtml = features.map((feature, index) => {
+      const icon = ["•••", "▣", "✦"][index % 3];
+      const [headline, detail = ""] = String(feature.text).split("|");
+      return `<li><span class="icon">${icon}</span><strong>${escapeHtml(headline)}</strong>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</li>`;
+    }).join("");
+    return `<main class="tz-paywall ${spec.templateId}">
+      <button class="tz-close" data-tranzmit-action="dismiss" aria-label="Close">×</button>
+      <section class="brand"><span class="mark">In</span><strong>Influish</strong></section>
+      <h1>Start <span>Earning</span> with Pro</h1>
+      <p class="subtitle">${escapeHtml(spec.header.subtitle || "")}</p>
+      <section class="stats-row"><article><b>8,20,737+</b><small>creators trust Influish</small></article><article><b>42,000+</b><small>creators earning with Pro</small></article></section>
+      <section class="offer annual-offer">
+        ${product.badge ? `<div class="badge">★ ${escapeHtml(product.badge)}</div>` : ""}
+        <div class="price-row annual-price"><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.price)}</span></div>
+        ${product.description ? `<p class="monthly">${escapeHtml(product.description)}</p>` : ""}
+        ${product.originalPrice ? `<p class="original">${escapeHtml(product.originalPrice)}</p>` : ""}
+      </section>
+      <ul class="features">${featureHtml}</ul>
+      <section class="testimonial annual-testimonial"><span class="avatar avatar-riya"></span><div><strong>${escapeHtml(product.metadata?.testimonialName || "Riya")} <small>· ${escapeHtml(product.metadata?.testimonialFollowers || "58K followers")}</small></strong><p>“ ${escapeHtml(product.metadata?.testimonialText || "")} ”</p></div></section>
+      <section class="legal-row"><span>▣ Secure payments</span><span>◖ Creator support</span><span>↻ Cancel anytime</span></section>
+      <button class="cta" data-tranzmit-action="cta" data-product-id="${escapeHtml(product.id)}">${escapeHtml(typeof spec.cta === "string" ? spec.cta : spec.cta.text)}</button>
+      <p class="guarantee">♡ 7-day money-back guarantee</p>
+    </main>`;
+  }
   const featureHtml = features.map((feature, index) => {
     const icon = ["💬", "💼", "🪄", "🛡"][index % 4];
     return `<li><span class="icon">${icon}</span><span>${escapeHtml(feature.text)}</span></li>`;
@@ -78,43 +131,63 @@ function buildCss(spec) {
   return `html,body{margin:0;min-height:100%;background:transparent;overflow-x:hidden}
 body{font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;color:${text};}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-.tz-paywall{min-height:100svh;background:${bg};padding:clamp(14px,4vw,22px);padding-bottom:calc(clamp(92px,24vw,112px) + env(safe-area-inset-bottom));border-radius:clamp(20px,7vw,28px);text-align:center;position:relative;overflow-x:hidden;overflow-y:auto;display:flex;flex-direction:column;gap:clamp(8px,1.8vh,14px)}
-.tz-close{position:absolute;left:clamp(10px,3vw,16px);top:clamp(10px,3vw,16px);border:0;background:#fff;border-radius:999px;width:clamp(34px,9vw,38px);height:clamp(34px,9vw,38px);font-size:clamp(22px,7vw,28px);color:#6f6878;z-index:2}
-.brand{display:flex;justify-content:center;align-items:center;gap:8px;font-size:clamp(19px,6vw,24px);margin:clamp(6px,1.5vh,10px) 42px clamp(8px,2vh,18px)}
-.mark{background:${accent};color:#fff;padding:4px 6px;font-weight:900}
-h1{font-size:clamp(29px,9.2vw,40px);line-height:1.05;margin:0 clamp(4px,3vw,12px);font-weight:900;letter-spacing:-.04em;text-wrap:balance}
-.subtitle{color:#6f6878;font-size:clamp(14px,4vw,16px);line-height:1.35;margin:0 auto;max-width:340px}
-.social{display:inline-block;max-width:100%;background:#fff;border:1px solid #e8e1f6;border-radius:999px;padding:clamp(7px,2.5vw,9px) clamp(10px,3.5vw,14px);font-size:clamp(13px,3.8vw,16px);font-weight:800;white-space:normal}
-.offer{background:#fff;border:1.5px solid ${accent};border-radius:clamp(18px,6vw,24px);padding:clamp(22px,6vw,28px) clamp(12px,4vw,18px) clamp(16px,5vw,20px);margin:clamp(10px,2vh,18px) 0 clamp(4px,1.5vh,12px);box-shadow:0 12px 28px rgba(101,55,217,.12);position:relative}
-.badge{position:absolute;left:50%;top:-15px;transform:translateX(-50%);background:#e6b246;color:#fff;border-radius:8px;padding:7px 16px;font-weight:900;font-size:clamp(11px,3.4vw,13px);white-space:nowrap}
-.price-row{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(104px,.9fr);align-items:center;justify-items:center;gap:clamp(6px,2vw,12px)}
-.price-row strong{color:${accent};font-size:clamp(36px,11vw,56px);line-height:.98;font-weight:900;letter-spacing:-.04em;overflow-wrap:anywhere}
-.price-row span{font-size:clamp(17px,4.7vw,22px);font-weight:800;line-height:1.12}
-.monthly{color:${accent};font-weight:900;font-size:clamp(15px,4.4vw,18px);margin:8px 0 0}
-.original{text-decoration:line-through;color:#8b8492;margin:4px 0 0;font-size:clamp(13px,4vw,16px)}
-.features{display:grid;grid-template-columns:1fr;gap:8px;list-style:none;padding:0;margin:0}
-.features li{display:flex;align-items:center;gap:10px;background:#fff;border-radius:14px;padding:clamp(10px,3vw,12px);text-align:left;font-size:clamp(13px,3.7vw,16px);font-weight:700;line-height:1.25}
-.icon{background:#f5f1ff;color:${accent};border-radius:10px;width:clamp(28px,8vw,32px);height:clamp(28px,8vw,32px);display:grid;place-items:center;flex:0 0 auto}
-.testimonial{background:#fff;border:1px solid #eeeaf4;border-radius:18px;padding:clamp(11px,3vw,14px);text-align:left}
-.testimonial p{margin:6px 0 0;color:#3a3347}
-.cta{border:0;border-radius:999px;background:${accent};color:#fff;min-height:clamp(52px,13vw,58px);font-size:clamp(17px,4.8vw,20px);font-weight:900;box-shadow:0 12px 24px rgba(101,55,217,.22);position:fixed;left:clamp(14px,4vw,22px);right:clamp(14px,4vw,22px);bottom:clamp(14px,4vw,22px);z-index:3}
-.legal{color:#736d7c;font-size:12px;margin:0}
-.influish_annual_pro .features{grid-template-columns:repeat(3,minmax(0,1fr))}
-.influish_annual_pro .features li{display:block;text-align:center;font-size:13px}
-.influish_intro_offer .offer{margin-top:22px}
+.tz-paywall{min-height:100svh;background:radial-gradient(circle at 50% 38%,rgba(118,59,232,.13),transparent 34%),linear-gradient(180deg,#fff 0%,#fbf8ff 100%);padding:clamp(18px,4.8vw,28px) clamp(18px,5.2vw,30px);padding-bottom:calc(clamp(84px,22vw,98px) + env(safe-area-inset-bottom));border-radius:clamp(20px,7vw,28px);text-align:center;position:relative;overflow-x:hidden;overflow-y:auto;display:flex;flex-direction:column;color:${text}}
+.tz-close{position:absolute;left:clamp(14px,4vw,22px);top:clamp(14px,4vw,22px);border:0;background:#fff;border-radius:999px;width:42px;height:42px;font-size:34px;line-height:38px;color:#34303b;z-index:4;box-shadow:0 10px 28px rgba(25,20,40,.08)}
+.tz-close-right{left:auto;right:clamp(16px,4vw,24px);background:transparent;box-shadow:none;color:#7d7784;font-size:36px}
+.brand{display:flex;justify-content:center;align-items:center;gap:8px;font-size:clamp(20px,5.5vw,25px);font-weight:900;margin:clamp(8px,1.6vh,18px) 46px clamp(10px,2vh,18px)}
+.mark{width:34px;height:38px;display:grid;place-items:center;background:${accent};color:#fff;font-family:Georgia,serif;font-weight:900;font-size:24px;clip-path:polygon(0 0,100% 0,100% 100%,50% 78%,0 100%)}
+.brand em{background:${accent};color:#fff;border-radius:999px;padding:2px 8px;font-size:12px;font-style:normal;letter-spacing:.02em}
+h1{font-size:clamp(35px,10.3vw,46px);line-height:1.04;margin:0;font-weight:950;letter-spacing:-.055em;text-wrap:balance}
+h1 span{color:${accent}}
+.subtitle{color:#6f6878;font-size:clamp(15px,4vw,17px);line-height:1.32;margin:clamp(8px,1.4vh,12px) auto 0;max-width:360px}
+.offer{background:rgba(255,255,255,.94);border:1.5px solid rgba(113,58,225,.72);border-radius:26px;box-shadow:0 18px 38px rgba(101,55,217,.12),0 2px 0 rgba(255,255,255,.8) inset;position:relative}
+.badge{position:absolute;left:50%;top:-18px;transform:translateX(-50%);background:linear-gradient(180deg,#f6c35d,#dfa536);color:#fff;border-radius:9px;padding:7px 16px;font-weight:900;font-size:14px;white-space:nowrap;box-shadow:0 7px 16px rgba(180,121,26,.22)}
+.price-row strong{color:${accent};font-weight:950;letter-spacing:-.055em;overflow-wrap:anywhere}
+.monthly{color:${accent};font-weight:900;margin:8px 0 0}
+.original{text-decoration:line-through;color:#8b8492;margin:4px 0 0}
+.features{list-style:none;padding:0;margin:0}
+.icon{background:#f5f1ff;color:${accent};display:grid;place-items:center;flex:0 0 auto;font-weight:900}
+.testimonial{background:#fff;border:1px solid #eeeaf4;box-shadow:0 12px 34px rgba(35,28,56,.05)}
+.avatar{display:block;background:linear-gradient(135deg,#24162f,#f2d3c6);border-radius:50%;box-shadow:0 0 0 3px #fff}
+.cta{border:0;border-radius:999px;background:linear-gradient(180deg,#8848f0,#612cdd);color:#fff;min-height:64px;font-size:clamp(20px,5.4vw,25px);font-weight:950;box-shadow:0 15px 34px rgba(101,55,217,.28);position:fixed;left:clamp(20px,5vw,42px);right:clamp(20px,5vw,42px);bottom:clamp(16px,4.5vw,24px);z-index:3}
+.legal-row{display:flex;align-items:center;justify-content:space-around;gap:6px;color:#6f6878;font-size:12px;background:rgba(255,255,255,.84);border:1px solid #eeeaf4;border-radius:999px;padding:9px 12px}
+.influish_intro_offer{gap:clamp(6px,1vh,10px)}
+.influish_intro_offer h1{font-size:clamp(32px,9.55vw,42px)}
+.influish_intro_offer .subtitle{margin-top:4px}
+.intro-brand{margin-top:clamp(10px,2vh,20px)}
+.intro-offer{margin:clamp(7px,1.2vh,11px) 28px 0;padding:22px 16px 12px;border-color:#eee7fb}
+.intro-offer:before,.intro-offer:after{content:"";position:absolute;top:-18px;width:28px;height:24px;background:#c88d25;z-index:-1}.intro-offer:before{left:74px;transform:skewX(-25deg)}.intro-offer:after{right:74px;transform:skewX(25deg)}
+.intro-price strong{font-size:clamp(29px,8.4vw,39px);letter-spacing:-.03em;color:#19162b}.intro-price strong span{color:${accent};font-size:1.48em}
+.intro-price strong span,.intro-price strong{line-height:1}.price-sub{color:#7b7482;margin:8px 0 0;font-size:17px}.offer-divider{height:1px;background:#eeeaf4;margin:14px 18px 8px}.intro-offer .monthly{display:inline-flex;align-items:center;gap:6px;background:#f6f1ff;border-radius:999px;padding:7px 18px;font-size:15px}.intro-offer .monthly span{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:${accent};color:#fff}
+.price-sub{margin:5px 0 0;font-size:16px}.offer-divider{margin:8px 20px 6px}.intro-offer .monthly{padding:5px 16px;font-size:14px}.intro-offer .monthly span{width:22px;height:22px}
+.creator-proof{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:2px}.avatars{display:flex;align-items:center}.avatars span,.avatars b{width:31px;height:31px;border-radius:50%;margin-left:-7px;border:2px solid #fff;background:linear-gradient(135deg,#29162c,#f2c4aa)}.avatars span:first-child{margin-left:0}.avatars span:nth-child(2){background:linear-gradient(135deg,#141a2f,#d7c7bb)}.avatars span:nth-child(3){background:linear-gradient(135deg,#2f2316,#f1d6b0)}.avatars b{display:grid;place-items:center;background:${accent};color:#fff;font-size:11px}.creator-proof p{margin:0;text-align:left;color:#5e5867;line-height:1.18;font-size:13px}.creator-proof strong{color:${accent};font-size:18px}
+.feature-panel{background:#fff;border-radius:20px;padding:12px 14px 11px;text-align:left;box-shadow:0 14px 34px rgba(35,28,56,.06)}.feature-panel h2{font-size:17px;margin:0 0 7px}.feature-panel .features{display:grid;gap:0;border:1px solid #eeeaf4;border-radius:14px;overflow:hidden}.feature-panel li{display:grid;grid-template-columns:28px 1fr 10px;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid #eeeaf4;font-size:12px;line-height:1.12}.feature-panel li:last-child{border-bottom:0}.feature-panel .icon{width:24px;height:24px;border-radius:7px}.feature-panel b{font-size:20px;color:${accent};font-weight:400}
+.intro-testimonial{display:flex;align-items:center;gap:12px;border-radius:18px;padding:12px;text-align:left}.intro-testimonial .avatar{width:58px;height:58px}.intro-testimonial strong{display:block}.intro-testimonial small{font-weight:500;color:#7b7482}.intro-testimonial p{color:#e4b23e;letter-spacing:2px;margin:4px 0 2px}.intro-testimonial em{font-style:normal}.influish_intro_offer .legal-row{margin-top:0}
+.influish_annual_pro{gap:clamp(12px,2vh,18px);padding-left:clamp(20px,7vw,48px);padding-right:clamp(20px,7vw,48px)}
+.influish_annual_pro .brand{margin-top:clamp(8px,1.5vh,16px)}.influish_annual_pro h1{font-size:clamp(39px,11vw,50px)}.influish_annual_pro .subtitle{max-width:340px}
+.stats-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.stats-row article{background:#fff;border-radius:12px;padding:12px 10px;display:grid;gap:4px;box-shadow:0 12px 28px rgba(35,28,56,.06)}.stats-row b{color:${accent};font-size:19px}.stats-row small{font-size:12px;color:#6f6878}
+.annual-offer{margin-top:6px;padding:34px 18px 24px}.annual-price{display:flex;align-items:flex-end;justify-content:center;gap:8px}.annual-price strong{font-size:clamp(72px,20vw,95px);line-height:.86}.annual-price span{font-size:22px;font-weight:900}.annual-offer .monthly{font-size:22px}.annual-offer .original{font-size:18px}
+.influish_annual_pro .features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.influish_annual_pro .features li{background:#fff;border-radius:14px;box-shadow:0 12px 28px rgba(35,28,56,.06);padding:16px 9px;display:grid;gap:7px;text-align:center;min-height:170px;align-content:start}.influish_annual_pro .features .icon{width:42px;height:42px;border-radius:14px;margin:0 auto}.influish_annual_pro .features strong{font-size:19px;line-height:1.07;letter-spacing:-.02em}.influish_annual_pro .features small{font-size:12px;color:#8b8492;line-height:1.28}
+.annual-testimonial{display:flex;align-items:center;gap:14px;border-radius:20px;padding:13px 18px;text-align:left;position:relative;overflow:hidden}.annual-testimonial:after{content:"”";position:absolute;right:20px;top:-12px;color:#f2eaff;font-size:112px;font-weight:900}.annual-testimonial .avatar{width:64px;height:64px}.annual-testimonial strong{display:block}.annual-testimonial small{font-weight:500;color:#7b7482}.annual-testimonial p{font-style:italic;color:#332b44;margin:6px 0 0;line-height:1.34}.guarantee{position:fixed;left:0;right:0;bottom:calc(4px + env(safe-area-inset-bottom));margin:0;color:#8b8492;font-size:12px;text-align:center;z-index:3}
 @media (max-width:360px){
-  .price-row{grid-template-columns:1fr}
-  .brand{margin-left:38px;margin-right:38px}
-  .testimonial{font-size:13px}
+  .influish_annual_pro .features strong{font-size:16px}
+  .annual-price strong{font-size:64px}
+  .intro-offer{margin-left:8px;margin-right:8px}
 }
 @media (max-height:700px){
-  .tz-paywall{gap:8px}
-  .brand{margin-bottom:8px}
+  .tz-paywall{gap:8px;padding-top:12px}
+  .brand{margin-bottom:4px}
+  .subtitle{font-size:13px}
   .testimonial{display:none}
+  .legal-row{display:none}
+  .influish_annual_pro .features li{min-height:132px;padding:10px 6px}
 }
 @supports (bottom:max(0px)){
   .cta{bottom:max(clamp(14px,4vw,22px),env(safe-area-inset-bottom))}
-}`;
+}
+.tz-presentation-fullscreen .tz-paywall{width:100vw!important;min-height:100svh!important;margin:0!important;border-radius:0!important;box-shadow:none!important}
+.tz-presentation-fullscreen .tz-close,.tz-presentation-fullscreen .close{display:none!important}
+.tz-presentation-sheet .tz-paywall,.tz-presentation-modal .tz-paywall{border-radius:clamp(20px,7vw,28px)}`;
 }
 
 function escapeHtml(value) {
@@ -153,6 +226,7 @@ const specs = {
       cta: "Continue with Pro ✨",
       socialProof: "Trusted by 8,20,737+ creators · ₹2.3 Cr+ paid out this year",
       legal: "No hidden charges · Cancel anytime · Secure checkout",
+      presentation: "fullscreen",
       product: {
         id: "influish_intro_weekly",
         name: "Try for ₹49",
@@ -174,6 +248,7 @@ const specs = {
       cta: "Start Earning with Pro ✨",
       socialProof: "8,20,737+ creators trust Influish · 42,000+ creators earning with Pro",
       legal: "Secure payments · Creator support · Cancel anytime",
+      presentation: "fullscreen",
       product: {
         id: "influish_annual_yearly",
         name: "₹999",
@@ -184,7 +259,7 @@ const specs = {
         isDefault: true,
         metadata: { testimonialName: "Riya", testimonialFollowers: "58K followers", testimonialText: "Pro helped me land paid campaigns within weeks." },
       },
-      features: ["Get 3x more brand replies", "Unlock ₹10,000+ monthly brand deals", "Access AI tools for hooks, captions & growth"],
+      features: ["Get 3x more brand replies|Stand out, get noticed and close more deals.", "Unlock ₹10,000+ monthly brand deals|Get matched with high-paying brand campaigns.", "Access AI tools for hooks, captions & growth|Create better content, faster and smarter."],
     }),
   },
 };
@@ -262,9 +337,9 @@ async function main() {
     const introOffer = await upsertSpec(client, workspaceId, "introOffer");
     const annualPro = await upsertSpec(client, workspaceId, "annualPro");
 
-    const upgrade = await upsertPlacement(client, publicKey, "upgrade_pro", freeTrial.id, freeTrial.spec);
-    await upsertVariant(client, upgrade, "control", freeTrial.id, freeTrial.spec, 0);
-    await upsertVariant(client, upgrade, "intro_offer", introOffer.id, introOffer.spec, 1);
+    const upgrade = await upsertPlacement(client, publicKey, "upgrade_pro", introOffer.id, introOffer.spec);
+    await upsertVariant(client, upgrade, "control", introOffer.id, introOffer.spec, 0);
+    await upsertVariant(client, upgrade, "free_trial", freeTrial.id, freeTrial.spec, 1);
     await upsertVariant(client, upgrade, "annual_pro", annualPro.id, annualPro.spec, 2);
 
     await client.query("COMMIT");

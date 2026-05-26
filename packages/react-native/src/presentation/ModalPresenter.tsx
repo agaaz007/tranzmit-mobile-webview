@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Modal, Pressable, View } from "react-native";
+import { Modal, Pressable, Text, View } from "react-native";
 
 let SafeAreaView: any = View;
 try {
@@ -45,6 +45,28 @@ export function ModalPresenter({
           ? { flex: 1, backgroundColor: "#000" }
           : { flex: 1, justifyContent: "center", paddingHorizontal: 18, paddingVertical: 12 }}
         >
+          {fullscreen ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss paywall"
+              onPress={onDismiss}
+              hitSlop={8}
+              style={{
+                alignItems: "center",
+                backgroundColor: "rgba(255, 255, 255, 0.92)",
+                borderRadius: 24,
+                height: 48,
+                justifyContent: "center",
+                left: 8,
+                position: "absolute",
+                top: 8,
+                width: 48,
+                zIndex: 10,
+              }}
+            >
+              <Text style={{ color: "#6f6878", fontSize: 28, lineHeight: 32 }}>×</Text>
+            </Pressable>
+          ) : null}
           {children}
         </SafeAreaView>
       </View>

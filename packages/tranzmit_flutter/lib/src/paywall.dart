@@ -176,12 +176,24 @@ class _PresentedSpec extends StatelessWidget {
     if (presentation == PresentationMode.fullscreen) {
       return Positioned.fill(
         child: Material(
-          color: Colors.black,
-          child: SpecRenderer(
-            spec: spec,
-            presentation: presentation,
-            onCTA: onCTA,
-            onDismiss: onDismiss,
+          color: Colors.transparent,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: SpecRenderer(
+                  spec: spec,
+                  presentation: presentation,
+                  onCTA: onCTA,
+                  onDismiss: onDismiss,
+                ),
+              ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: _FullscreenCloseButton(spec: spec, onDismiss: onDismiss),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -211,6 +223,37 @@ class _PresentedSpec extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               child: child,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FullscreenCloseButton extends StatelessWidget {
+  const _FullscreenCloseButton({required this.spec, required this.onDismiss});
+
+  final PaywallSpec spec;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final alignRight = spec.templateId == 'influish_intro_offer';
+    return Align(
+      alignment: alignRight ? Alignment.topRight : Alignment.topLeft,
+      child: Material(
+        color: alignRight
+            ? Colors.transparent
+            : Colors.white.withValues(alpha: 0.92),
+        shape: const CircleBorder(),
+        elevation: alignRight ? 0 : 2,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onDismiss,
+          child: const SizedBox(
+            width: 48,
+            height: 48,
+            child: Icon(Icons.close, color: Color(0xFF6F6878), size: 24),
           ),
         ),
       ),

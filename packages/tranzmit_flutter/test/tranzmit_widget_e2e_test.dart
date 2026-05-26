@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tranzmit_flutter/src/controller.dart';
 import 'package:tranzmit_flutter/src/models.dart';
 import 'package:tranzmit_flutter/src/widgets/spec_renderer.dart';
 
@@ -65,5 +66,20 @@ void main() {
 
     expect(product, isNotNull);
     expect(product!.id, 'pro_monthly');
+  });
+
+  test('composes presentation-aware fullscreen documents', () {
+    final spec = PaywallSpec.fromJson(Map<String, dynamic>.from(_baseSpec));
+    final html = composePaywallDocumentForTest(
+      spec,
+      presentation: PresentationMode.fullscreen,
+    );
+
+    expect(html, contains('tz-presentation-fullscreen'));
+    expect(html, contains('data-tranzmit-presentation="fullscreen"'));
+    expect(html, contains('border-radius: 0 !important'));
+    expect(html, contains('width: 100vw !important'));
+    expect(html, contains('.tz-presentation-fullscreen .tz-close'));
+    expect(html, contains('display: none !important'));
   });
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render } from "@testing-library/react";
-import { SpecRenderer } from "../src/renderer/SpecRenderer.js";
+import { composeDocumentForTest, SpecRenderer } from "../src/renderer/SpecRenderer.js";
 import { baseSpec } from "./fixtures.js";
 
 describe("SpecRenderer", () => {
@@ -34,5 +34,16 @@ describe("SpecRenderer", () => {
     fireEvent.click(getByText("Maybe later"));
 
     expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("injects presentation-aware fullscreen document styles", () => {
+    const html = composeDocumentForTest(baseSpec, "fullscreen");
+
+    expect(html).toContain("tz-presentation-fullscreen");
+    expect(html).toContain('data-tranzmit-presentation="fullscreen"');
+    expect(html).toContain("border-radius: 0 !important");
+    expect(html).toContain("width: 100vw !important");
+    expect(html).toContain(".tz-presentation-fullscreen .tz-close");
+    expect(html).toContain("display: none !important");
   });
 });

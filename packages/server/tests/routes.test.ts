@@ -124,6 +124,9 @@ describe("GET /config", () => {
     expect(config.placements.onboarding.spec.document?.css).toContain("position:fixed");
     expect(config.placements.onboarding.spec.document?.css).not.toContain("overflow:hidden");
     expect(config.placements.onboarding.spec.presentation?.mode).toBe("sheet");
+    expect(config.placements.onboarding.spec.document?.css).toContain("tz-presentation-fullscreen");
+    expect(config.placements.onboarding.spec.document?.css).toContain("border-radius:0!important");
+    expect(config.placements.onboarding.spec.document?.css).toContain("display:none!important");
     expect(config.placements.onboarding.spec.document?.url).toContain("/v1/paywall-documents/pl_1/var_1/");
 	    expect("experimentId" in config.placements.onboarding).toBe(false);
 	  });

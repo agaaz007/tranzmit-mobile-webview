@@ -17,7 +17,7 @@ export function SpecRenderer({
   onCTA,
   onDismiss,
 }: SpecRendererProps) {
-  const html = useMemo(() => composeDocument(spec), [spec]);
+  const html = useMemo(() => composeDocument(spec, presentation), [presentation, spec]);
 
   const handleMessage = (event: WebViewMessageEvent) => {
     const raw = event.nativeEvent.data;
@@ -102,22 +102,65 @@ function isAllowed(spec: PaywallSpec, type: string) {
   return allowed.includes(type as any);
 }
 
-function composeDocument(spec: PaywallSpec) {
+export function composeDocumentForTest(spec: PaywallSpec, presentation: PresentationMode = "sheet") {
+  return composeDocument(spec, presentation);
+}
+
+function composeDocument(spec: PaywallSpec, presentation: PresentationMode) {
   const document = spec.document || legacyDocument(spec);
   const js = document.js ? `<script>${document.js}</script>` : "";
+  const presentationClass = `tz-presentation-${presentation}`;
   return `<!doctype html>
-<html>
+<html class="${presentationClass}" data-tranzmit-presentation="${presentation}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <style>
-  html, body { margin: 0; padding: 0; background: transparent; -webkit-font-smoothing: antialiased; }
+  html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; background: transparent; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  body { min-height: 100svh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   button, a { touch-action: manipulation; }
   ${document.css || ""}
+  html, body { max-width: 100vw; overflow-x: hidden !important; }
+  .tz-paywall, .tranzmit-paywall {
+    max-width: 100vw;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+  .${presentationClass} .tz-paywall,
+  .${presentationClass} .tranzmit-paywall {
+    min-height: 100%;
+  }
+  .tz-presentation-fullscreen,
+  .tz-presentation-fullscreen body {
+    width: 100%;
+    height: 100%;
+    min-height: 100svh;
+    overflow: hidden;
+  }
+  .tz-presentation-fullscreen .tz-paywall,
+  .tz-presentation-fullscreen .tranzmit-paywall {
+    width: 100vw !important;
+    min-height: 100svh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .tz-presentation-fullscreen .tz-close,
+  .tz-presentation-fullscreen .close {
+    display: none !important;
+  }
+  .tz-presentation-sheet .tz-paywall,
+  .tz-presentation-sheet .tranzmit-paywall,
+  .tz-presentation-modal .tz-paywall,
+  .tz-presentation-modal .tranzmit-paywall {
+    border-radius: clamp(20px, 7vw, 28px);
+  }
+  h1, h2, h3, p, strong, span, button, a { overflow-wrap: anywhere; }
+  @supports (min-height: 100dvh) { body { min-height: 100dvh; } }
 </style>
 </head>
-<body>
+<body class="${presentationClass}">
 ${document.html}
 ${js}
 <script>

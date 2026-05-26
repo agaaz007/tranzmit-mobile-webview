@@ -50,6 +50,8 @@ Supported values are `sheet` (bottom popup), `modal` (centered popup), `fullscre
 
 Every hosted paywall document must be mobile-fluid: no fixed desktop-only cards, no root `overflow:hidden`, and no typography that assumes one screen width. The server templates use `clamp()` sizing, scrollable WebView roots, and fixed bottom CTA buttons; mobile SDKs inject a final safety stylesheet so hosted documents fit Android/iOS screen sizes instead of clipping.
 
+Presentation mode is also passed into the WebView document as `tz-presentation-sheet`, `tz-presentation-modal`, `tz-presentation-fullscreen`, or `tz-presentation-inline` on `<html>` and `<body>`. Fullscreen removes document border radius and expands the paywall root edge-to-edge; sheet and modal preserve rounded corners inside their constrained containers.
+
 ## How It Works
 
 ```
