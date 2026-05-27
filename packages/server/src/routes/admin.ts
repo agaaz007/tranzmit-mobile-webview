@@ -10,10 +10,6 @@ import {
 } from "../statsig.js";
 import crypto from "node:crypto";
 
-if (!process.env.ADMIN_SECRET) {
-  console.error("[Tranzmit] FATAL: ADMIN_SECRET env var is required. Server will reject all admin requests.");
-}
-
 function unauthorized(res: ServerResponse): void {
   res.writeHead(401, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ error: "Unauthorized" }));

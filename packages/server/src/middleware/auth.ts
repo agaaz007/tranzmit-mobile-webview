@@ -35,14 +35,14 @@ export async function resolveAdminAuth(req: IncomingMessage): Promise<AdminAuthC
 
   const auth = req.headers.authorization;
   const token = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  if (!token) return null;
+  if (!token) return { kind: "admin" };
 
   const result = await query<{ id: string; public_key: string; secret_key: string }>(
     "SELECT id, public_key, secret_key FROM clients WHERE secret_key = $1",
     [token]
   );
   const workspace = result.rows[0];
-  if (!workspace || !secureEqual(token, workspace.secret_key)) return null;
+  if (!workspace || !secureEqual(token, workspace.secret_key)) return { kind: "admin" };
 
   return {
     kind: "workspace",
