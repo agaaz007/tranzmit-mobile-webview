@@ -90,11 +90,48 @@ void main() {
     expect(html, contains('data-tranzmit-presentation="fullscreen"'));
     expect(html, contains('--tz-vh: 915.00px'));
     expect(html, contains('--tz-safe-bottom: 18.00px'));
+    expect(
+        html, contains('--tz-cta-reserved-height: clamp(86px, 10.5vh, 108px)'));
     expect(html, contains('"pixelRatio":2.75'));
     expect(html, contains('border-radius: 0 !important'));
+    expect(html, contains('height: var(--tz-vh) !important'));
+    expect(
+        html,
+        contains(
+            'padding-bottom: calc(var(--tz-safe-bottom) + var(--tz-cta-reserved-height)) !important'));
     expect(html, contains('width: var(--tz-vw) !important'));
-    expect(html, contains('.tz-presentation-fullscreen .tz-close'));
+    expect(
+        html,
+        contains(
+            '.tz-presentation-fullscreen .tz-paywall:not(.phone) .tz-close'));
     expect(html, contains('display: none !important'));
     expect(html, contains('window.TranzmitNativeViewport'));
+  });
+
+  test('does not flatten imported phone artboards with fullscreen overrides',
+      () {
+    final specJson = Map<String, dynamic>.from(_baseSpec);
+    specJson['document'] = {
+      'html':
+          '<main class="tz-paywall phone"><div class="cta" data-tranzmit-action="cta">Continue</div></main>',
+      'css':
+          '.phone{width:412px;height:920px;border-radius:54px;box-shadow:0 0 0 11px #0c0815}',
+    };
+    final spec = PaywallSpec.fromJson(specJson);
+    final html = composePaywallDocumentForTest(
+      spec,
+      presentation: PresentationMode.fullscreen,
+    );
+
+    expect(
+        html, contains('.tz-presentation-fullscreen .tz-paywall:not(.phone)'));
+    expect(
+        html,
+        isNot(contains(
+            '.tz-presentation-fullscreen .tz-paywall,\\n  .tz-presentation-fullscreen .tranzmit-paywall')));
+    expect(
+        html,
+        contains(
+            '.phone{width:412px;height:920px;border-radius:54px;box-shadow:0 0 0 11px #0c0815}'));
   });
 }

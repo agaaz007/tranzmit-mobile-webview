@@ -278,6 +278,7 @@ class PaywallViewport {
   --tz-safe-right: ${safeRight.toStringAsFixed(2)}px;
   --tz-device-pixel-ratio: ${pixelRatio.toStringAsFixed(3)};
   --tz-scale: ${scale.toStringAsFixed(4)};
+  --tz-cta-reserved-height: clamp(86px, 10.5vh, 108px);
 ''';
 
   double get scale {
@@ -428,12 +429,12 @@ ${resolvedViewport.cssVariables}
 ${document.css ?? ''}
   html, body { max-width: var(--tz-vw); overflow-x: hidden !important; }
   body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
-  .tz-paywall, .tranzmit-paywall {
+  .tz-paywall:not(.phone), .tranzmit-paywall {
     max-width: var(--tz-vw);
     overflow-x: hidden !important;
     overflow-y: auto !important;
   }
-  .$presentationClass .tz-paywall,
+  .$presentationClass .tz-paywall:not(.phone),
   .$presentationClass .tranzmit-paywall {
     min-height: 100%;
   }
@@ -444,30 +445,108 @@ ${document.css ?? ''}
     min-height: var(--tz-vh);
     overflow: hidden;
   }
-  .tz-presentation-fullscreen .tz-paywall,
+  .tz-presentation-fullscreen .tz-paywall:not(.phone),
   .tz-presentation-fullscreen .tranzmit-paywall {
     width: var(--tz-vw) !important;
+    height: var(--tz-vh) !important;
     min-height: var(--tz-vh) !important;
+    max-height: var(--tz-vh) !important;
     margin: 0 !important;
+    padding-bottom: calc(var(--tz-safe-bottom) + var(--tz-cta-reserved-height)) !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    overflow-y: auto !important;
   }
-  .tz-presentation-fullscreen .cta {
+  .tz-presentation-fullscreen .tz-paywall:not(.phone) .cta,
+  .tz-presentation-fullscreen .tranzmit-paywall .cta {
     left: calc(var(--tz-safe-left) + clamp(14px, 4vw, 22px)) !important;
     right: calc(var(--tz-safe-right) + clamp(14px, 4vw, 22px)) !important;
     bottom: calc(var(--tz-safe-bottom) + clamp(10px, 3vw, 18px)) !important;
   }
-  .tz-presentation-fullscreen .tz-close,
-  .tz-presentation-fullscreen .close {
+  .tz-presentation-fullscreen .tz-paywall:not(.phone) .tz-close,
+  .tz-presentation-fullscreen .tranzmit-paywall .tz-close,
+  .tz-presentation-fullscreen .tz-paywall:not(.phone) .close,
+  .tz-presentation-fullscreen .tranzmit-paywall .close {
     display: none !important;
   }
-  .tz-presentation-sheet .tz-paywall,
+  @media (max-height: 880px) {
+    .tz-presentation-fullscreen .influish_intro_offer {
+      gap: clamp(4px, 0.75vh, 8px) !important;
+    }
+    .tz-presentation-fullscreen .influish_intro_offer .intro-brand {
+      margin-top: 0 !important;
+      margin-bottom: 2px !important;
+    }
+    .tz-presentation-fullscreen .influish_intro_offer h1 {
+      font-size: clamp(30px, 8.6vw, 39px) !important;
+      line-height: 0.98 !important;
+    }
+    .tz-presentation-fullscreen .influish_intro_offer .subtitle {
+      font-size: clamp(13px, 3.6vw, 15px) !important;
+      line-height: 1.25 !important;
+      margin-top: 2px !important;
+    }
+    .tz-presentation-fullscreen .influish_intro_offer .intro-offer {
+      margin-top: 6px !important;
+      padding: 18px 14px 10px !important;
+    }
+    .tz-presentation-fullscreen .influish_intro_offer .intro-price strong {
+      font-size: clamp(28px, 7.8vw, 36px) !important;
+    }
+    .tz-presentation-fullscreen .influish_intro_offer .feature-panel {
+      padding: 10px 12px !important;
+    }
+    .tz-presentation-fullscreen .influish_intro_offer .feature-panel li {
+      padding-top: 6px !important;
+      padding-bottom: 6px !important;
+    }
+    .tz-presentation-fullscreen .influish_intro_offer .intro-testimonial {
+      display: flex !important;
+      gap: 9px !important;
+      padding: 9px 10px !important;
+      border-radius: 16px !important;
+      font-size: 12px !important;
+      line-height: 1.18 !important;
+    }
+    .tz-presentation-fullscreen .influish_intro_offer .intro-testimonial .avatar {
+      width: 42px !important;
+      height: 42px !important;
+      flex: 0 0 42px !important;
+    }
+    .tz-presentation-fullscreen .influish_intro_offer .intro-testimonial p {
+      margin: 1px 0 0 !important;
+      letter-spacing: 1px !important;
+      line-height: 1 !important;
+    }
+    .tz-presentation-fullscreen .influish_intro_offer .intro-testimonial em {
+      display: none !important;
+    }
+    .tz-presentation-fullscreen .influish_intro_offer .legal-row {
+      margin-top: auto !important;
+    }
+  }
+  .tz-presentation-sheet .tz-paywall:not(.phone),
   .tz-presentation-sheet .tranzmit-paywall,
-  .tz-presentation-modal .tz-paywall,
+  .tz-presentation-modal .tz-paywall:not(.phone),
   .tz-presentation-modal .tranzmit-paywall {
     border-radius: clamp(20px, 7vw, 28px);
   }
-  h1, h2, h3, p, strong, span, button, a { overflow-wrap: anywhere; }
+  .tz-paywall:not(.phone) h1,
+  .tz-paywall:not(.phone) h2,
+  .tz-paywall:not(.phone) h3,
+  .tz-paywall:not(.phone) p,
+  .tz-paywall:not(.phone) strong,
+  .tz-paywall:not(.phone) span,
+  .tz-paywall:not(.phone) button,
+  .tz-paywall:not(.phone) a,
+  .tranzmit-paywall h1,
+  .tranzmit-paywall h2,
+  .tranzmit-paywall h3,
+  .tranzmit-paywall p,
+  .tranzmit-paywall strong,
+  .tranzmit-paywall span,
+  .tranzmit-paywall button,
+  .tranzmit-paywall a { overflow-wrap: anywhere; }
 </style>
 </head>
 <body class="$presentationClass">
