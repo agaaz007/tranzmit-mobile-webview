@@ -7,6 +7,7 @@ import { initStatsig, isConfigured as isStatsigConfigured, isInitialized as isSt
 import { checkRateLimit, LIMITS } from "./middleware/rate-limit.js";
 import { handleUsage } from "./routes/usage.js";
 import { handlePaywallDocument } from "./routes/paywall-documents.js";
+import { handleAsset } from "./routes/assets.js";
 import { pool } from "./db.js";
 import { runMigrations } from "./migrations.js";
 
@@ -124,6 +125,12 @@ async function handler(req: IncomingMessage, res: ServerResponse): Promise<void>
       const rl = checkRateLimit(`paywall-doc:${key}`, LIMITS.config);
       if (!rl.allowed) { rateLimited(res, rl.resetAt); return; }
       await handlePaywallDocument(req, res, path);
+      return;
+    }
+
+    // --- Immutable paywall image assets ---
+    if (path.startsWith("/assets/") && req.method === "GET") {
+      await handleAsset(res, path);
       return;
     }
 

@@ -59,7 +59,7 @@ export function ensureWebViewSpec(spec: unknown, context?: WebViewDocumentContex
   const html = stringOrUndefined(existingDocument.html) || buildLegacyWebViewHtml(next);
   const css = stringOrUndefined(existingDocument.css) || stringOrUndefined(next.customCss) || buildLegacyWebViewCss(next);
   const js = stringOrUndefined(existingDocument.js);
-  const baseUrl = stringOrUndefined(existingDocument.baseUrl);
+  const baseUrl = stringOrUndefined(existingDocument.baseUrl) || context?.apiBaseUrl;
   const contentHash = hashDocument({ html, css, js, baseUrl });
   const revision = `doc-${contentHash.slice(0, 12)}`;
   const cacheKey = `${next.templateId}:${revision}`;
@@ -95,8 +95,8 @@ function normalizePresentation(value: unknown): { mode: string } {
   return { mode: "sheet" };
 }
 
-export function webViewDocumentPayload(spec: unknown): WebViewDocumentPayload {
-  const normalized = ensureWebViewSpec(spec, { publicKey: "", placementId: "", variantKey: "", apiBaseUrl: "", includeInline: true });
+export function webViewDocumentPayload(spec: unknown, context?: WebViewDocumentContext): WebViewDocumentPayload {
+  const normalized = ensureWebViewSpec(spec, context ? { ...context, includeInline: true } : { publicKey: "", placementId: "", variantKey: "", apiBaseUrl: "", includeInline: true });
   const document = normalized.document || {};
   return {
     html: document.html || "",

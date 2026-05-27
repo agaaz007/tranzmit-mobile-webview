@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { getPlacementsForKey, validatePublicKey } from "../db.js";
-import { hashDocument, webViewDocumentPayload } from "../webview-documents.js";
+import { hashDocument, publicApiBaseUrl, webViewDocumentPayload } from "../webview-documents.js";
 
 export async function handlePaywallDocument(
   req: IncomingMessage,
@@ -48,7 +48,12 @@ export async function handlePaywallDocument(
     return;
   }
 
-  const payload = webViewDocumentPayload(rawSpec);
+  const payload = webViewDocumentPayload(rawSpec, {
+    publicKey,
+    placementId: row.id,
+    variantKey,
+    apiBaseUrl: publicApiBaseUrl(req),
+  });
   if (payload.cacheKey !== requestedCacheKey) {
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Paywall document revision not found" }));
