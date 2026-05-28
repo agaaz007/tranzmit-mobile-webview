@@ -2,10 +2,14 @@ import type { ReactNode } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 
 let SafeAreaView: any = View;
+let useSafeAreaInsets: undefined | (() => { top: number; bottom: number; left: number; right: number });
 try {
-  SafeAreaView = require("react-native-safe-area-context").SafeAreaView || View;
+  const safeArea = require("react-native-safe-area-context");
+  SafeAreaView = safeArea.SafeAreaView || View;
+  useSafeAreaInsets = safeArea.useSafeAreaInsets;
 } catch {
   SafeAreaView = View;
+  useSafeAreaInsets = undefined;
 }
 
 export function ModalPresenter({
@@ -19,6 +23,8 @@ export function ModalPresenter({
   children: ReactNode;
   fullscreen?: boolean;
 }) {
+  const insets = useSafeAreaInsets ? useSafeAreaInsets() : { top: 0, bottom: 0, left: 0, right: 0 };
+
   return (
     <Modal
       visible={visible}
@@ -47,21 +53,21 @@ export function ModalPresenter({
               accessibilityRole="button"
               accessibilityLabel="Dismiss paywall"
               onPress={onDismiss}
-              hitSlop={8}
+              hitSlop={10}
               style={{
                 alignItems: "center",
-                backgroundColor: "rgba(255, 255, 255, 0.92)",
-                borderRadius: 24,
-                height: 48,
+                backgroundColor: "transparent",
+                borderRadius: 16,
+                height: 32,
                 justifyContent: "center",
-                left: 8,
+                left: insets.left + 10,
                 position: "absolute",
-                top: 8,
-                width: 48,
+                top: insets.top + 6,
+                width: 32,
                 zIndex: 10,
               }}
             >
-              <Text style={{ color: "#6f6878", fontSize: 28, lineHeight: 32 }}>×</Text>
+              <Text style={{ color: "rgba(110, 103, 131, 0.72)", fontSize: 22, lineHeight: 24, fontWeight: "300" }}>×</Text>
             </Pressable>
             {children}
           </View>
