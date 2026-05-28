@@ -13,3 +13,4 @@ scripts/smoke-sdk.mjs
 .dart_tool/
 build/
 .flutter-plugins-dependencies
+.gstack/
