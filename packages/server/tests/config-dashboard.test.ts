@@ -56,4 +56,11 @@ describe("config dashboard product editing", () => {
     expect(templates.influish_intro_offer).toContain("tranzmit:intro-offer-expiry");
     expect(css).toContain(".countdown-trigger");
   });
+
+  it("serves valid inline dashboard JavaScript", () => {
+    const html = renderDashboard();
+    const match = html.match(/<script>([\s\S]*?)<\/script>/);
+    expect(match).toBeTruthy();
+    expect(() => new Function(match![1])).not.toThrow();
+  });
 });
