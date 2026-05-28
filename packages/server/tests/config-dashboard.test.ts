@@ -18,7 +18,7 @@ function renderDashboard(): string {
 }
 
 function decodeStandaloneTemplates(html: string): Record<string, string> {
-  const match = html.match(/STANDALONE_PAYWALL_HTML_BY_TEMPLATE = JSON\.parse\(decodeBase64Utf8\("([^"]+)"\)\)/);
+  const match = html.match(/var STANDALONE_PAYWALL_HTML_BY_TEMPLATE = JSON\.parse\(decodeBase64Utf8\("([^"]+)"\)\)/);
   expect(match).toBeTruthy();
   return JSON.parse(Buffer.from(match![1], "base64").toString("utf8"));
 }
