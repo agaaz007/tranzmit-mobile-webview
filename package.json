@@ -15,8 +15,7 @@
     "migrate": "tsx packages/server/src/migrations.ts",
     "dev:server": "npm run dev --workspace=packages/server",
     "seed": "node scripts/seed.mjs",
-    "smoke:admin": "node scripts/smoke-admin.mjs",
-    "test:visual:android": "node scripts/paywall-screenshot-regression.mjs"
+    "smoke:admin": "node scripts/smoke-admin.mjs"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
