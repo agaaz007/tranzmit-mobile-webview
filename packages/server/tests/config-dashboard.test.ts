@@ -17,6 +17,18 @@ function renderDashboard(): string {
   return body;
 }
 
+function decodeStandaloneTemplates(html: string): Record<string, string> {
+  const match = html.match(/STANDALONE_PAYWALL_HTML_BY_TEMPLATE = JSON\.parse\(decodeBase64Utf8\("([^"]+)"\)\)/);
+  expect(match).toBeTruthy();
+  return JSON.parse(Buffer.from(match![1], "base64").toString("utf8"));
+}
+
+function decodeStandaloneCss(html: string): string {
+  const match = html.match(/STANDALONE_PAYWALL_CSS = decodeBase64Utf8\("([^"]+)"\)/);
+  expect(match).toBeTruthy();
+  return Buffer.from(match![1], "base64").toString("utf8");
+}
+
 describe("config dashboard product editing", () => {
   it("exposes billing product ID as an editable paywall field", () => {
     const html = renderDashboard();
@@ -32,5 +44,16 @@ describe("config dashboard product editing", () => {
     expect(html).toContain("els.fieldBillingProductId.value = product.id || ''");
     expect(html).toContain("product.id = els.fieldBillingProductId.value.trim() || product.id || 'product'");
     expect(html).toContain('data-product-id="');
+  });
+
+  it("keeps the intro offer 24-hour countdown in dashboard templates", () => {
+    const html = renderDashboard();
+    const templates = decodeStandaloneTemplates(html);
+    const css = decodeStandaloneCss(html);
+
+    expect(templates.influish_intro_offer).toContain("countdown-trigger");
+    expect(templates.influish_intro_offer).toContain("Offer expires in:");
+    expect(templates.influish_intro_offer).toContain("tranzmit:intro-offer-expiry");
+    expect(css).toContain(".countdown-trigger");
   });
 });
