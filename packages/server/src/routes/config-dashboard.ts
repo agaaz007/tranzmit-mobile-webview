@@ -271,6 +271,7 @@ const DASHBOARD_HTML = `<!doctype html>
                       <div class="field"><span class="field-label">Footer / Legal</span><input id="fieldLegal" class="spec-field"></div>
                     </div>
                     <div class="grid-3">
+                      <div class="field"><span class="field-label">Billing Product ID</span><input id="fieldBillingProductId" class="spec-field" placeholder="com.app.pro.yearly"></div>
                       <div class="field"><span class="field-label">Product name</span><input id="fieldProductName" class="spec-field"></div>
                       <div class="field"><span class="field-label">Price</span><input id="fieldProductPrice" class="spec-field"></div>
                       <div class="field"><span class="field-label">Original price</span><input id="fieldOriginalPrice" class="spec-field"></div>
@@ -426,7 +427,7 @@ const DASHBOARD_HTML = `<!doctype html>
       lastCreatedSecretKey: null,
     };
     var els = {};
-    var fieldIds = ['fieldTitle','fieldSubtitle','fieldCta','fieldPresentation','fieldLegal','fieldProductName','fieldProductPrice','fieldOriginalPrice','fieldBadge','fieldMonthly','fieldSocialProof','fieldFeature1','fieldFeature2','fieldFeature3','fieldFeature4','fieldTestimonialName','fieldTestimonialFollowers','fieldTestimonialText','fieldAccentColor','fieldBackgroundColor','fieldTextColor'];
+    var fieldIds = ['fieldTitle','fieldSubtitle','fieldCta','fieldPresentation','fieldLegal','fieldBillingProductId','fieldProductName','fieldProductPrice','fieldOriginalPrice','fieldBadge','fieldMonthly','fieldSocialProof','fieldFeature1','fieldFeature2','fieldFeature3','fieldFeature4','fieldTestimonialName','fieldTestimonialFollowers','fieldTestimonialText','fieldAccentColor','fieldBackgroundColor','fieldTextColor'];
 
     document.addEventListener('DOMContentLoaded', function() {
       [
@@ -914,6 +915,7 @@ const DASHBOARD_HTML = `<!doctype html>
       els.fieldCta.value = typeof spec.cta === 'string' ? spec.cta : (spec.cta && spec.cta.text) || '';
       els.fieldPresentation.value = (spec.presentation && spec.presentation.mode) || 'sheet';
       els.fieldLegal.value = spec.legal || '';
+      els.fieldBillingProductId.value = product.id || '';
       els.fieldProductName.value = product.name || '';
       els.fieldProductPrice.value = typeof product.price === 'string' ? product.price : (product.price ? JSON.stringify(product.price) : '');
       els.fieldOriginalPrice.value = product.originalPrice || '';
@@ -947,7 +949,7 @@ const DASHBOARD_HTML = `<!doctype html>
         if (els.fieldTextColor.value) spec.style.textColor = els.fieldTextColor.value;
         spec.products = spec.products && spec.products.length ? spec.products : [{}];
         var product = spec.products[0];
-        product.id = product.id || 'product';
+        product.id = els.fieldBillingProductId.value.trim() || product.id || 'product';
         product.name = els.fieldProductName.value;
         product.price = els.fieldProductPrice.value;
         product.originalPrice = els.fieldOriginalPrice.value || undefined;
