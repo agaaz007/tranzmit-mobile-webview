@@ -1,5 +1,5 @@
 name: tranzmit_flutter
-description: Flutter SDK for presenting Tranzmit paywalls and tracking conversion events.
+description: Client Flutter SDK for Tranzmit server-driven paywalls, Statsig-backed assignment, and conversion tracking.
 version: 0.1.0
 homepage: https://tranzmit.com
 publish_to: none

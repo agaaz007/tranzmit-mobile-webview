@@ -1,6 +1,6 @@
-# Tranzmit Flutter SDK Harness
+# tranzmit-flutter-sdk Example Harness
 
-Minimal Flutter app for validating the Tranzmit SDK against a live server. There is **no hardcoded paywall UI** in this app — paywalls come only from remote config and hosted WebView documents.
+Minimal Flutter app for validating the Tranzmit SDK against a live server. There is **no hardcoded paywall UI** in this app. Paywalls come only from remote config and hosted WebView documents.
 
 ## Run
 
@@ -19,13 +19,16 @@ flutter run \
   --dart-define=TRANZMIT_TRIGGER=upgrade_pro
 ```
 
+The harness passes a demo `userId`. In a customer app, pass the real logged-in app user id when available. When logged out, omit `userId`; the SDK generates and persists a `stableID` for Statsig bucketing.
+
 ## What to verify
 
 1. **SDK status → Ready: yes** after init
 2. **Remote placement** shows variant, presentation, cache key, document URL, and **HTML hydrated: yes**
-3. Tap **Present "upgrade_pro"** — paywall renders from server HTML
-4. Tap CTA — demo host purchase dialog appears, then `reportConversion` fires
-5. Edit paywall text, CSS, or `presentation.mode` in the dashboard → tap **Refresh config** → present again to see updates
+3. Tap **Present "upgrade_pro"** and confirm the paywall renders from server HTML.
+4. Tap CTA and confirm the demo host purchase dialog appears, then `reportConversion` fires.
+5. Edit paywall text, CSS, variant allocation, or `presentation.mode` in the dashboard.
+6. Tap **Refresh config** and present again to see updates.
 
 ## Purchase ownership
 

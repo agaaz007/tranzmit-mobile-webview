@@ -1,6 +1,6 @@
 typedef JsonMap = Map<String, dynamic>;
 
-const defaultApiBaseUrl = 'https://tranzmit-api-production.up.railway.app';
+const defaultApiBaseUrl = 'https://api-production-2146.up.railway.app';
 
 class TranzmitConfig {
   const TranzmitConfig({

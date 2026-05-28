@@ -233,7 +233,7 @@ This repo owns the mobile SDKs and the mobile config dashboard. The legacy web S
 | `@tranzmit/shared` | Shared TypeScript types |
 | `@tranzmit/core` | Vanilla JS SDK (config, events, renderer) |
 | `@tranzmit/react-native` | React Native SDK (Provider, paywall rendering, hooks) |
-| `tranzmit_flutter` | Flutter SDK package with a runnable example app |
+| `tranzmit_flutter` | `tranzmit-flutter-sdk` client package with verbose customer docs and a runnable Flutter example |
 | `@tranzmit/server` | Mobile config service + event ingestion (Node.js + Postgres) |
 
 ## Server
