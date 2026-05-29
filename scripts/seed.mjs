@@ -1,19 +1,90 @@
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import pg from "pg";
 
 const { Pool } = pg;
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const EXPORT_ONLY = process.env.SEED_EXPORT_JSON === "1";
 const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
+if (!EXPORT_ONLY && !DATABASE_URL) {
   console.error("Missing DATABASE_URL");
   process.exit(1);
 }
 
-const pool = new Pool({ connectionString: DATABASE_URL });
+const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
 const SEED_CLIENT_ID = process.env.SEED_CLIENT_ID || "client_influish_demo";
 const SEED_PUBLIC_KEY = process.env.SEED_PUBLIC_KEY || "pk_test_2a8a5f07d4b9fcf1cc77e024";
-const SEED_SECRET_KEY = process.env.SEED_SECRET_KEY || "sk_test_influish_demo";
+const SEED_SECRET_KEY = process.env.SEED_SECRET_KEY || "";
 const SEED_CLIENT_NAME = process.env.SEED_CLIENT_NAME || "Influish Demo";
 const SEED_REVISION = process.env.SEED_REVISION || "seed-v13";
+const SEED_ANNUAL_PRICE = Number(process.env.SEED_ANNUAL_PRICE || 999);
+const SEED_ORIGINAL_PRICE = Number(process.env.SEED_ORIGINAL_PRICE || 5988);
+const SEED_INCLUDE_ORIGINAL_PAYWALL = process.env.SEED_INCLUDE_ORIGINAL_PAYWALL !== "false";
+const SEED_VARIANT_PROFILE = process.env.SEED_VARIANT_PROFILE || "default";
+
+function resolveInfluishLogoSrc() {
+  if (process.env.SEED_LOGO_SRC) return process.env.SEED_LOGO_SRC;
+  if (process.env.SEED_LOGO_EMBED === "1") {
+    const logoFile = path.resolve(__dirname, "../packages/server/public/assets/paywalls/influish-logo-v1.png");
+    if (fs.existsSync(logoFile)) {
+      return `data:image/png;base64,${fs.readFileSync(logoFile).toString("base64")}`;
+    }
+  }
+  return "/assets/paywalls/influish-logo-v1.png";
+}
+
+const INFLUISH_LOGO_SRC = resolveInfluishLogoSrc();
+const INFLUISH_LOGO_MARK_HTML =
+  `<img class="logo-mark influish-logo" src="${INFLUISH_LOGO_SRC}" alt="Influish" width="36" height="42" loading="eager" decoding="async" />`;
+const INFLUISH_LOGO_BRAND_HTML =
+  `<img class="mark influish-logo" src="${INFLUISH_LOGO_SRC}" alt="Influish" width="36" height="42" loading="eager" decoding="async" />`;
+
+function formatInr(amount) {
+  return Number(amount).toLocaleString("en-IN");
+}
+
+function seedPricing() {
+  const annual = SEED_ANNUAL_PRICE;
+  const original = SEED_ORIGINAL_PRICE;
+  const monthly = Math.round(annual / 12);
+  const discountPct = Math.max(0, Math.round((1 - annual / original) * 100));
+  return {
+    annual,
+    original,
+    monthly,
+    discountPct,
+    annualLabel: `₹${formatInr(annual)}`,
+    originalLabel: `₹${formatInr(original)}`,
+    monthlyOnly: `Only ₹${monthly}/month`,
+    monthlyJust: `Just ₹${monthly}/month`,
+    thenAnnual: `Then ₹${formatInr(annual)}/year`,
+    discountOff: `(${discountPct}% OFF)`,
+  };
+}
+
+const PRICING = seedPricing();
+
+function applyInfluishTemplateVars(html) {
+  return html
+    .replace(/<div class="logo-mark">In<\/div>/g, INFLUISH_LOGO_MARK_HTML)
+    .replace(/<span class="ru">₹<\/span>999/g, `<span class="ru">₹</span>${PRICING.annual}`)
+    .replace(/Only ₹83\/month/g, PRICING.monthlyOnly)
+    .replace(/<div class="strike">₹5,988<\/div>/g, `<div class="strike">${PRICING.originalLabel}</div>`)
+    .replace(/\(83% OFF\)/g, PRICING.discountOff)
+    .replace(/&#8377;5,988/g, PRICING.originalLabel.replace("₹", "&#8377;"))
+    .replace(/&#8377;999/g, PRICING.annualLabel.replace("₹", "&#8377;"));
+}
+
+const INFLUISH_LOGO_CSS = `
+.influish-logo.logo-mark,.influish-logo.mark,.brand .influish-logo{
+  width:36px;height:42px;object-fit:contain;display:block;flex:0 0 auto;
+  border-radius:0;background:none;box-shadow:none;color:inherit;font:inherit;
+}
+.influish-logo.logo-mark::after{display:none!important}
+`;
 
 function designDocument(templateId) {
   const baseBreakpoints = [
@@ -78,13 +149,17 @@ function standalonePaywallHtml(spec) {
   const template = STANDALONE_PAYWALL_HTML_BY_TEMPLATE[spec.templateId];
   if (!template) return null;
   const product = spec.products?.[0] || {};
-  return template.replace(/\{\{PRODUCT_ID\}\}/g, escapeHtml(product.id || "product"));
+  return applyInfluishTemplateVars(
+    template.replace(/\{\{PRODUCT_ID\}\}/g, escapeHtml(product.id || "product")),
+  );
 }
 
 function standalonePaywallCss(spec) {
   if (!STANDALONE_PAYWALL_HTML_BY_TEMPLATE[spec.templateId]) return null;
-  if (spec.templateId === "original_paywall") return ORIGINAL_PAYWALL_CSS;
-  return STANDALONE_PAYWALL_CSS;
+  if (spec.templateId === "original_paywall") {
+    return ORIGINAL_PAYWALL_CSS + INFLUISH_LOGO_CSS;
+  }
+  return STANDALONE_PAYWALL_CSS + INFLUISH_LOGO_CSS;
 }
 
 function webviewSpec({ templateId, title, subtitle, cta, product, features, socialProof, legal, presentation = "sheet" }) {
@@ -136,7 +211,7 @@ function buildHtml(spec) {
     }).join("");
     return `<main class="tz-paywall ${spec.templateId}">
       <button class="tz-close tz-close-right" data-tranzmit-action="dismiss" aria-label="Close">×</button>
-      <section class="brand intro-brand"><span class="mark">In</span><strong>Influish</strong><em>PRO</em></section>
+      <section class="brand intro-brand">${INFLUISH_LOGO_BRAND_HTML}<strong>Influish</strong><em>PRO</em></section>
       <h1>Unlock More Collabs.<br><span>Earn More.</span></h1>
       <p class="subtitle">${escapeHtml(spec.header.subtitle || "")}</p>
       <section class="offer intro-offer">
@@ -169,7 +244,7 @@ function buildHtml(spec) {
     }).join("");
     return `<main class="tz-paywall ${spec.templateId}">
       <button class="tz-close" data-tranzmit-action="dismiss" aria-label="Close">×</button>
-      <section class="brand"><span class="mark">In</span><strong>Influish</strong></section>
+      <section class="brand">${INFLUISH_LOGO_BRAND_HTML}<strong>Influish</strong></section>
       <h1>Start <span>Earning</span> with Pro</h1>
       <p class="subtitle">${escapeHtml(spec.header.subtitle || "")}</p>
       <section class="stats-row"><article><b>8,20,737+</b><small>creators trust Influish</small></article><article><b>42,000+</b><small>creators earning with Pro</small></article></section>
@@ -192,7 +267,7 @@ function buildHtml(spec) {
   }).join("");
   return `<main class="tz-paywall ${spec.templateId}">
     <button class="tz-close" data-tranzmit-action="dismiss" aria-label="Close">×</button>
-    <section class="brand"><span class="mark">In</span><strong>Influish</strong></section>
+    <section class="brand">${INFLUISH_LOGO_BRAND_HTML}<strong>Influish</strong></section>
     <h1>${escapeHtml(spec.header.title)}</h1>
     <p class="subtitle">${escapeHtml(spec.header.subtitle || "")}</p>
     ${spec.social_proof ? `<div class="social">${escapeHtml(spec.social_proof.text)}</div>` : ""}
@@ -219,11 +294,12 @@ function buildCss(spec) {
   return `html,body{margin:0;min-height:100%;background:transparent;overflow-x:hidden}
 body{font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;color:${text};}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-.tz-paywall{min-height:var(--tz-vh,100svh);background:radial-gradient(circle at 50% 38%,rgba(118,59,232,.13),transparent 34%),linear-gradient(180deg,#fff 0%,#fbf8ff 100%);padding:clamp(18px,4.8vw,28px) clamp(18px,5.2vw,30px);padding-bottom:calc(clamp(84px,22vw,98px) + var(--tz-safe-bottom,env(safe-area-inset-bottom)));border-radius:clamp(20px,7vw,28px);text-align:center;position:relative;overflow-x:hidden;overflow-y:auto;display:flex;flex-direction:column;color:${text};transform-origin:top center}
+.tz-paywall{min-height:var(--tz-vh,100svh);background:radial-gradient(circle at 50% 38%,rgba(118,59,232,.13),transparent 34%),linear-gradient(180deg,#fff 0%,#fbf8ff 100%);padding:clamp(18px,4.8vw,28px) clamp(18px,5.2vw,30px);padding-bottom:calc(clamp(84px,22vw,98px) + var(--tz-safe-bottom,env(safe-area-inset-bottom)));border-radius:clamp(20px,7vw,28px);text-align:center;position:relative;overflow-x:hidden;overflow-y:auto;display:flex;flex-direction:column;color:${text};transfolrm-origin:top center}
 .tz-close{position:absolute;left:clamp(14px,4vw,22px);top:clamp(14px,4vw,22px);border:0;background:#fff;border-radius:999px;width:42px;height:42px;font-size:34px;line-height:38px;color:#34303b;z-index:4;box-shadow:0 10px 28px rgba(25,20,40,.08)}
 .tz-close-right{left:auto;right:clamp(16px,4vw,24px);background:transparent;box-shadow:none;color:#7d7784;font-size:36px}
 .brand{display:flex;justify-content:center;align-items:center;gap:8px;font-size:clamp(20px,5.5vw,25px);font-weight:900;margin:clamp(8px,1.6vh,18px) 46px clamp(10px,2vh,18px)}
-.mark{width:34px;height:38px;display:grid;place-items:center;background:${accent};color:#fff;font-family:Georgia,serif;font-weight:900;font-size:24px;clip-path:polygon(0 0,100% 0,100% 100%,50% 78%,0 100%)}
+.mark:not(.influish-logo){width:34px;height:38px;display:grid;place-items:center;background:${accent};color:#fff;font-family:Georgia,serif;font-weight:900;font-size:24px;clip-path:polygon(0 0,100% 0,100% 100%,50% 78%,0 100%)}
+.influish-logo.mark,.brand .influish-logo{width:36px;height:42px;object-fit:contain;display:block;flex:0 0 auto}
 .brand em{background:${accent};color:#fff;border-radius:999px;padding:2px 8px;font-size:12px;font-style:normal;letter-spacing:.02em}
 h1{font-size:clamp(35px,10.3vw,46px);line-height:1.04;margin:0;font-weight:950;letter-spacing:-.055em;text-wrap:balance}
 h1 span{color:${accent}}
@@ -323,9 +399,9 @@ const specs = {
       product: {
         id: "influish_trial_yearly",
         name: "3-Day Free Trial",
-        price: "Then ₹999/year",
-        description: "Just ₹83/month",
-        originalPrice: "₹5,988",
+        price: PRICING.thenAnnual,
+        description: PRICING.monthlyJust,
+        originalPrice: PRICING.originalLabel,
         badge: "Most Popular",
         isDefault: true,
         metadata: { testimonialName: "Shivani", testimonialFollowers: "24K followers", testimonialText: "Earned ₹12,500 in 18 days" },
@@ -367,10 +443,10 @@ const specs = {
       presentation: "fullscreen",
       product: {
         id: "influish_annual_yearly",
-        name: "₹999",
+        name: PRICING.annualLabel,
         price: "/year",
-        description: "Only ₹83/month",
-        originalPrice: "₹5,988",
+        description: PRICING.monthlyOnly,
+        originalPrice: PRICING.originalLabel,
         badge: "Best Value",
         isDefault: true,
         metadata: { testimonialName: "Riya", testimonialFollowers: "58K followers", testimonialText: "Pro helped me land paid campaigns within weeks." },
@@ -391,10 +467,10 @@ const specs = {
         presentation: "fullscreen",
         product: {
           id: "inpass_pro_yearly",
-          name: "₹999",
+          name: PRICING.annualLabel,
           price: "/year",
-          description: "Only ₹83/month",
-          originalPrice: "₹5,988",
+          description: PRICING.monthlyOnly,
+          originalPrice: PRICING.originalLabel,
           badge: "Best Value",
           isDefault: true,
         },
@@ -405,6 +481,34 @@ const specs = {
     })(),
   },
 };
+
+const VARIANT_PROFILES = {
+  default: [
+    { variantKey: "control", specKey: "introOffer", fallbackRank: 0 },
+    { variantKey: "free_trial", specKey: "freeTrial", fallbackRank: 1 },
+    { variantKey: "annual_pro", specKey: "annualPro", fallbackRank: 2 },
+    ...(SEED_INCLUDE_ORIGINAL_PAYWALL
+      ? [{ variantKey: "original_paywall", specKey: "originalPaywall", fallbackRank: 3 }]
+      : []),
+  ],
+  influish_production: [
+    { variantKey: "control", specKey: "originalPaywall", fallbackRank: 0 },
+    { variantKey: "intro_offer", specKey: "introOffer", fallbackRank: 1 },
+    { variantKey: "original", specKey: "annualPro", fallbackRank: 2 },
+  ],
+};
+
+function resolveVariantProfile() {
+  const profile = VARIANT_PROFILES[SEED_VARIANT_PROFILE];
+  if (!profile) {
+    throw new Error(`Unknown SEED_VARIANT_PROFILE: ${SEED_VARIANT_PROFILE}`);
+  }
+  return profile;
+}
+
+function specIdForKey(specKey) {
+  return `spec_${specKey.replace(/([A-Z])/g, "_$1").toLowerCase()}`;
+}
 
 async function upsertSpec(client, workspaceId, key) {
   const item = specs[key];
@@ -422,6 +526,12 @@ async function upsertSpec(client, workspaceId, key) {
 }
 
 async function upsertPlacement(client, publicKey, trigger, defaultSpecId, defaultSpec, experimentId = null) {
+  const existing = await client.query(
+    `SELECT id FROM placements WHERE public_key = $1 AND trigger = $2`,
+    [publicKey, trigger],
+  );
+  const placementId = existing.rows[0]?.id || `pl_${publicKey.replace(/[^a-zA-Z0-9]+/g, "").slice(-12)}_${trigger}`;
+
   const result = await client.query(
     `INSERT INTO placements (
        id, public_key, trigger, enabled, status, variant_id, experiment_id,
@@ -438,7 +548,7 @@ async function upsertPlacement(client, publicKey, trigger, defaultSpecId, defaul
        spec = EXCLUDED.spec,
        updated_at = now()
      RETURNING id`,
-    [`pl_${trigger}`, publicKey, trigger, experimentId, defaultSpecId, JSON.stringify(defaultSpec)]
+    [placementId, publicKey, trigger, experimentId, defaultSpecId, JSON.stringify(defaultSpec)]
   );
   return result.rows[0].id;
 }
@@ -458,36 +568,98 @@ async function upsertVariant(client, placementId, variantKey, specId, spec, fall
   );
 }
 
+async function ensureWorkspace(client) {
+  const existing = await client.query(
+    `SELECT id, public_key FROM clients WHERE public_key = $1`,
+    [SEED_PUBLIC_KEY],
+  );
+  if (existing.rows[0]) {
+    await client.query(
+      `UPDATE clients SET name = $2, updated_at = now() WHERE public_key = $1`,
+      [SEED_PUBLIC_KEY, SEED_CLIENT_NAME],
+    );
+    return existing.rows[0];
+  }
+
+  if (!SEED_SECRET_KEY) {
+    throw new Error("SEED_SECRET_KEY is required when creating a new client");
+  }
+
+  const created = await client.query(
+    `INSERT INTO clients (id, public_key, secret_key, name)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, public_key`,
+    [SEED_CLIENT_ID, SEED_PUBLIC_KEY, SEED_SECRET_KEY, SEED_CLIENT_NAME],
+  );
+  return created.rows[0];
+}
+
+function buildImportPayload(publicKey) {
+  const placementId = `pl_${publicKey.replace(/[^a-zA-Z0-9]+/g, "").slice(-12)}_upgrade_pro`;
+  const profile = resolveVariantProfile();
+  const specKeys = [...new Set(profile.map((entry) => entry.specKey))];
+  const specsPayload = specKeys.map((key) => ({
+    id: specIdForKey(key),
+    name: specs[key].name,
+    spec: specs[key].spec,
+    status: "active",
+    created_by: "seed",
+  }));
+  const defaultEntry = profile[0];
+
+  return {
+    publicKey,
+    specs: specsPayload,
+    placements: [
+      {
+        id: placementId,
+        trigger: "upgrade_pro",
+        default_spec_id: specIdForKey(defaultEntry.specKey),
+        status: "active",
+        targeting_rules: [],
+      },
+    ],
+    variants: profile.map((entry) => ({
+      placement_id: placementId,
+      variant_key: entry.variantKey,
+      spec_id: specIdForKey(entry.specKey),
+      enabled: true,
+      status: "active",
+      weight: 50,
+    })),
+  };
+}
+
 async function main() {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const workspace = await client.query(
-      `INSERT INTO clients (id, public_key, secret_key, name)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (public_key) DO UPDATE SET
-         secret_key = EXCLUDED.secret_key,
-         name = EXCLUDED.name,
-         updated_at = now()
-       RETURNING id, public_key`,
-      [SEED_CLIENT_ID, SEED_PUBLIC_KEY, SEED_SECRET_KEY, SEED_CLIENT_NAME],
+    const workspace = await ensureWorkspace(client);
+    const workspaceId = workspace.id;
+    const publicKey = workspace.public_key;
+
+    const profile = resolveVariantProfile();
+    const savedSpecs = {};
+    for (const specKey of [...new Set(profile.map((entry) => entry.specKey))]) {
+      savedSpecs[specKey] = await upsertSpec(client, workspaceId, specKey);
+    }
+
+    const defaultEntry = profile[0];
+    const upgrade = await upsertPlacement(
+      client,
+      publicKey,
+      "upgrade_pro",
+      savedSpecs[defaultEntry.specKey].id,
+      savedSpecs[defaultEntry.specKey].spec,
     );
-    const workspaceId = workspace.rows[0].id;
-    const publicKey = workspace.rows[0].public_key;
 
-    const freeTrial = await upsertSpec(client, workspaceId, "freeTrial");
-    const introOffer = await upsertSpec(client, workspaceId, "introOffer");
-    const annualPro = await upsertSpec(client, workspaceId, "annualPro");
-    const originalPaywall = await upsertSpec(client, workspaceId, "originalPaywall");
-
-    const upgrade = await upsertPlacement(client, publicKey, "upgrade_pro", introOffer.id, introOffer.spec);
-    await upsertVariant(client, upgrade, "control", introOffer.id, introOffer.spec, 0);
-    await upsertVariant(client, upgrade, "free_trial", freeTrial.id, freeTrial.spec, 1);
-    await upsertVariant(client, upgrade, "annual_pro", annualPro.id, annualPro.spec, 2);
-    await upsertVariant(client, upgrade, "original_paywall", originalPaywall.id, originalPaywall.spec, 3);
+    for (const entry of profile) {
+      const saved = savedSpecs[entry.specKey];
+      await upsertVariant(client, upgrade, entry.variantKey, saved.id, saved.spec, entry.fallbackRank);
+    }
 
     await client.query("COMMIT");
-    console.log(`Seeded ${SEED_CLIENT_NAME} (${publicKey})`);
+    console.log(`Seeded ${SEED_CLIENT_NAME} (${publicKey}) with annual ${PRICING.annualLabel} (${PRICING.discountOff})`);
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -497,7 +669,11 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.env.SEED_EXPORT_JSON === "1") {
+  console.log(JSON.stringify(buildImportPayload(SEED_PUBLIC_KEY)));
+} else {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
