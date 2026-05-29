@@ -28,12 +28,12 @@ const SEED_VARIANT_PROFILE = process.env.SEED_VARIANT_PROFILE || "default";
 function resolveInfluishLogoSrc() {
   if (process.env.SEED_LOGO_SRC) return process.env.SEED_LOGO_SRC;
   if (process.env.SEED_LOGO_EMBED === "1") {
-    const logoFile = path.resolve(__dirname, "../packages/server/public/assets/paywalls/influish-logo-v1.png");
+    const logoFile = path.resolve(__dirname, "../packages/server/public/assets/paywalls/influish-logo-v2.png");
     if (fs.existsSync(logoFile)) {
       return `data:image/png;base64,${fs.readFileSync(logoFile).toString("base64")}`;
     }
   }
-  return "/assets/paywalls/influish-logo-v1.png";
+  return "/assets/paywalls/influish-logo-v2.png";
 }
 
 const INFLUISH_LOGO_SRC = resolveInfluishLogoSrc();
