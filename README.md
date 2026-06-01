@@ -90,7 +90,7 @@ The `trigger` string is just a key that maps to a placement you configured in th
   // Call once at app startup
   Tranzmit.init({
     publicKey: "pk_live_xxx",
-    userId: user && user.id, // use your auth/user ID; do not generate random IDs in production
+    userId: user && user.id, // optional until login; omit rather than passing a placeholder
     identifiers: {
       accountID: account && account.id,
       companyID: company && company.id
@@ -128,16 +128,17 @@ import { TranzmitProvider, TranzmitPaywall } from "@tranzmit/react";
 
 function App() {
   return (
-    <TranzmitProvider publicKey="pk_live_xxx" userId={user.id}>
+    <TranzmitProvider publicKey="pk_live_xxx" userId={user?.id} apiBaseUrl="https://your-tranzmit-api.example.com">
       <ExportButton />
     </TranzmitProvider>
   );
 }
 
 function ExportButton() {
-  const { gate } = useTranzmit();
+  const { gate, isReady } = useTranzmit();
 
   const handleExport = () => {
+    if (!isReady) return;
     const result = gate("export_pdf", {
       onCTA: (product) => startCheckout(product),
     });
@@ -147,6 +148,47 @@ function ExportButton() {
   return <button onClick={handleExport}>Export PDF</button>;
 }
 ```
+
+### React Native
+
+Install `@tranzmit/react-native` plus `@react-native-async-storage/async-storage` and `react-native-webview`.
+
+```tsx
+import { TranzmitProvider, useTranzmit } from "@tranzmit/react-native";
+
+function App() {
+  const { user } = useAuth(); // null before login
+
+  return (
+    <TranzmitProvider
+      publicKey="pk_live_xxx"
+      userId={user?.id}
+      apiBaseUrl="https://your-tranzmit-api.example.com"
+      onError={(err) => console.error("[Tranzmit]", err)}
+    >
+      <Screens />
+    </TranzmitProvider>
+  );
+}
+
+function UpgradeButton() {
+  const { gate, isReady } = useTranzmit();
+
+  return (
+    <Button
+      disabled={!isReady}
+      title="Upgrade"
+      onPress={() => {
+        gate("upgrade_pro", {
+          onCTA: (product) => startNativePurchase(product.id),
+        });
+      }}
+    />
+  );
+}
+```
+
+See `examples/expo-react-native/` for a runnable Expo testbed.
 
 ### SPA Frameworks (Next.js, Nuxt, SvelteKit, etc.)
 
@@ -169,14 +211,62 @@ await Tranzmit.init({ publicKey: "pk_live_xxx", userId: user.id });
 | `identifiers` | object | no | Extra stable IDs for advanced experiment units (`accountID`, `companyID`, etc.). The SDK automatically adds a browser `stableID` fallback. |
 | `userTraits` | object | no | Traits for targeting (plan, signup_date, etc.) |
 | `privateTraits` | object | no | Traits used for targeting but not stored in Tranzmit event rows |
-| `apiBaseUrl` | string | no | Override API URL |
+| `apiBaseUrl` | string | no | **Required** when your Tranzmit server is not the default `https://tranzmit-api-production.up.railway.app` host. Each client/project gets its own API URL and public key pair. |
 | `onError` | function | no | Error callback |
+
+### What the SDK Calls For You
+
+Customers integrate with **`init()` / `TranzmitProvider` only**. They do **not** manually call hosted document URLs.
+
+On init, the SDK automatically:
+
+1. `POST /v1/config` — fetch placements, variant assignment, and document metadata
+2. `GET /v1/paywall-documents/...` — hydrate hosted HTML/CSS when the server uses hosted document delivery
+3. Cache the result locally for offline render + background refresh
+
+Later, `gate()` renders the cached document. `track()`, impressions, dismissals, CTA clicks, and `reportConversion()` go to `POST /v1/events` automatically.
+
+After dashboard edits during QA, call `refreshConfig()` to repeat steps 1–2.
 
 ### Identity and Experiment Bucketing
 
-For production client apps, `userId` should come from the customer's auth or session system. Tranzmit should not invent random logged-in user IDs.
+`userId` is **optional**. Pass it only when you have a real authenticated user id from your auth system. Do **not** pass placeholder ids such as `"guest"`, `"0"`, or a random uuid at app startup.
 
-The SDK also creates a Tranzmit browser stable ID and stores it in `localStorage` under `tranzmit:stable_id:<publicKey>`. This ID is a fallback for anonymous/device-level assignment and is sent to Tranzmit as `identity.identifiers.stableID`; customers do not need a Statsig SDK or Statsig key.
+When `userId` is omitted, the SDK still initializes using a persisted device-level **`stableID`** (AsyncStorage on React Native, `localStorage` on web). That is enough for config fetch, paywall render, and anonymous experiment assignment.
+
+When `userId` is provided later, `TranzmitProvider` **re-initializes automatically** because `userId` is in its init dependency list. Expect a brief `isReady === false` window while config re-fetches for the logged-in identity.
+
+#### Pattern A — Mount provider at app root (recommended)
+
+Use when paywalls may appear before login, or when you want config pre-cached at launch.
+
+```tsx
+<TranzmitProvider userId={user?.id} publicKey="pk_live_xxx" apiBaseUrl="https://your-api.example.com">
+  {children}
+</TranzmitProvider>
+```
+
+- Before login: `user?.id` is `undefined`, SDK uses `stableID`
+- After login: same provider, now with real `userId`; SDK re-inits
+- On logout: pass `undefined` again (or unmount the provider)
+
+#### Pattern B — Mount provider only after login
+
+Use when paywalls are login-only and you do not want any anonymous Tranzmit session.
+
+```tsx
+if (!user) return <LoginFlow />;
+
+return (
+  <TranzmitProvider userId={user.id} publicKey="pk_live_xxx" apiBaseUrl="https://your-api.example.com">
+    {children}
+  </TranzmitProvider>
+);
+```
+
+Both patterns are supported by the current SDK. Choose based on whether anonymous users should ever see a paywall.
+
+The SDK stores stable IDs under `tranzmit:stable_id:<publicKey>`. Customers do not need a Statsig SDK or Statsig key.
 
 Server-side, Tranzmit maps identity into Statsig as:
 
@@ -192,7 +282,17 @@ Server-side, Tranzmit maps identity into Statsig as:
 }
 ```
 
-Use Statsig `User ID` as the default randomization unit for logged-in products. That keeps the same logged-in user in the same variant across normal browser, incognito, and devices as long as the client passes the same `userId`. Use `stableID` only when you intentionally want anonymous/browser-level assignment; incognito windows, cleared storage, and different browsers can produce different anonymous stable IDs.
+Use Statsig `User ID` as the default randomization unit for logged-in products. That keeps the same logged-in user in the same variant across devices as long as the client passes the same `userId`. Use `stableID` only when you intentionally want anonymous/device-level assignment.
+
+#### Testing variants without affecting production traffic
+
+There is no SDK `forceVariant` flag today. To QA a specific arm:
+
+1. In Statsig Console, add a **user override** for your test `userId`
+2. In the app, call `await refreshConfig()` then `gate("your_trigger")`
+3. Or temporarily disable other variants in the config dashboard and leave one arm active
+
+Use a dedicated QA `userId` rather than random ids so overrides stay stable.
 
 ### `gate(trigger, options)`
 

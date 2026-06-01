@@ -9,7 +9,7 @@ export function getSnippet(publicKey: string): string {
   // 1. Initialize once (on page load or app startup)
   Tranzmit.init({
     publicKey: "${publicKey}",
-    userId: YOUR_AUTH_USER_ID, // use your real auth/session user ID; do not generate random production IDs
+    userId: user && user.id, // optional until login; omit rather than passing a placeholder
     apiBaseUrl: "${API_BASE}"
   });
 

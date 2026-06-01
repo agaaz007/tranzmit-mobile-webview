@@ -76,6 +76,34 @@ describe("TranzmitProvider", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
+  it("re-inits when userId changes from anonymous to logged-in", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockConfig),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { rerender, getByText } = render(
+      <TranzmitProvider publicKey="pk_test_demo">
+        <GateHarness />
+      </TranzmitProvider>
+    );
+
+    await waitFor(() => expect(getByText("ready")).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <TranzmitProvider publicKey="pk_test_demo" userId="user_123">
+        <GateHarness />
+      </TranzmitProvider>
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(getByText("ready")).toBeTruthy());
+    const configBody = JSON.parse(fetchMock.mock.calls[1][1]!.body as string);
+    expect(configBody.identity.userId).toBe("user_123");
+  });
+
   it("hydrates hosted WebView documents before rendering", async () => {
     const hostedConfig = {
       ...mockConfig,
