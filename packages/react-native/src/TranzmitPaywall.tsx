@@ -14,6 +14,7 @@ export interface TranzmitPaywallProps {
   presentation?: PresentationMode;
   onCTA?: (product: ProductSpec) => void;
   onDismiss?: () => void;
+  onError?: (error: Error) => void;
   onImpression?: () => void;
 }
 
@@ -25,6 +26,7 @@ export function TranzmitPaywall({
   presentation,
   onCTA,
   onDismiss,
+  onError,
   onImpression,
 }: TranzmitPaywallProps) {
   const { getPlacement, track } = useTranzmit();
@@ -70,9 +72,10 @@ export function TranzmitPaywall({
         onDismiss={() => {
           handleDismiss();
         }}
+        onError={onError}
       />
     );
-  }, [handleDismiss, onCTA, presentation, resolvedSpec, resolvedTrigger, resolvedVariantId, track]);
+  }, [handleDismiss, onCTA, onError, presentation, resolvedSpec, resolvedTrigger, resolvedVariantId, track]);
 
   if (!visible || !resolvedSpec || !content) return null;
   const resolvedPresentation = presentation || presentationFromSpec(resolvedSpec);

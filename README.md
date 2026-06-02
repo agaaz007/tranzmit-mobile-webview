@@ -172,16 +172,24 @@ function App() {
 }
 
 function UpgradeButton() {
-  const { gate, isReady } = useTranzmit();
+  const { gate } = useTranzmit();
+
+  function openExistingPaywall() {
+    // Route to your current native/in-app paywall.
+  }
 
   return (
     <Button
-      disabled={!isReady}
       title="Upgrade"
       onPress={() => {
-        gate("upgrade_pro", {
+        const result = gate("upgrade_pro", {
           onCTA: (product) => startNativePurchase(product.id),
+          onFallback: ({ reason }) => {
+            console.warn("[Tranzmit] falling back to existing paywall", reason);
+            openExistingPaywall();
+          },
         });
+        if (!result.shown) return; // onFallback already routed to the existing paywall.
       }}
     />
   );
@@ -227,6 +235,34 @@ On init, the SDK automatically:
 Later, `gate()` renders the cached document. `track()`, impressions, dismissals, CTA clicks, and `reportConversion()` go to `POST /v1/events` automatically.
 
 After dashboard edits during QA, call `refreshConfig()` to repeat steps 1–2.
+
+### Fallback to an Existing Paywall
+
+Use `options.onFallback` to route customers back to your current in-app paywall if Tranzmit cannot show one. This prevents monetization dead ends when config is unavailable, the trigger is missing/disabled, or the WebView renderer fails.
+
+```tsx
+function showUpgradePaywall() {
+  const result = gate("upgrade_pro", {
+    onCTA: (product) => startNativePurchase(product.id),
+    onFallback: ({ reason, error }) => {
+      console.warn("[Tranzmit] fallback", reason, error);
+      openExistingInAppPaywall();
+    },
+  });
+
+  if (!result.shown) {
+    return; // onFallback already ran for not_ready / placement_not_found.
+  }
+}
+```
+
+Fallback reasons:
+
+| Reason | When it fires |
+|---|---|
+| `not_ready` | The SDK has not loaded a valid config yet |
+| `placement_not_found` | The trigger has no enabled placement in config |
+| `render_error` | The React Native WebView reports a render/load failure after showing begins |
 
 ### Identity and Experiment Bucketing
 
@@ -301,6 +337,7 @@ Use a dedicated QA `userId` rather than random ids so overrides stay stable.
 | `trigger` | string | Exact match to a placement trigger in the dashboard |
 | `options.onCTA` | `(product) => void` | Fires when user clicks a product/subscribe button |
 | `options.onDismiss` | `() => void` | Fires when user closes the paywall |
+| `options.onFallback` | `({ trigger, reason, error, variantId }) => void` | Fires when the SDK cannot safely show the Tranzmit paywall, so the app can open its existing paywall |
 | `options.onImpression` | `() => void` | Fires when paywall is displayed |
 | `options.container` | HTMLElement | Mount to a specific element (default: document.body) |
 

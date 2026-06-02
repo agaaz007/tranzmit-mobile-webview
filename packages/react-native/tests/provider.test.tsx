@@ -21,6 +21,28 @@ function GateHarness({ onCTA, onDismiss }: { onCTA?: any; onDismiss?: any }) {
   return <div>{isReady ? "ready" : "loading"}</div>;
 }
 
+function ImmediateFallbackHarness({ onFallback }: { onFallback?: any }) {
+  const { gate } = useTranzmit();
+
+  useEffect(() => {
+    gate("upgrade_pro", { onFallback });
+  }, [gate, onFallback]);
+
+  return null;
+}
+
+function MissingPlacementHarness({ onFallback }: { onFallback?: any }) {
+  const { isReady, gate } = useTranzmit();
+
+  useEffect(() => {
+    if (isReady) {
+      gate("missing_trigger", { onFallback });
+    }
+  }, [gate, isReady, onFallback]);
+
+  return null;
+}
+
 describe("TranzmitProvider", () => {
   beforeEach(() => {
     (AsyncStorage as any).clear();
@@ -60,6 +82,34 @@ describe("TranzmitProvider", () => {
     fireEvent.click(getByText("Start Free Trial").closest("button")!);
 
     expect(onCTA).toHaveBeenCalledWith(expect.objectContaining({ id: "pro_monthly" }));
+  });
+
+  it("calls fallback when gate is requested before Tranzmit is ready", async () => {
+    const onFallback = vi.fn();
+    render(
+      <TranzmitProvider publicKey="pk_test_demo">
+        <ImmediateFallbackHarness onFallback={onFallback} />
+      </TranzmitProvider>
+    );
+
+    await waitFor(() => expect(onFallback).toHaveBeenCalledWith({
+      trigger: "upgrade_pro",
+      reason: "not_ready",
+    }));
+  });
+
+  it("calls fallback when a placement is missing", async () => {
+    const onFallback = vi.fn();
+    render(
+      <TranzmitProvider publicKey="pk_test_demo">
+        <MissingPlacementHarness onFallback={onFallback} />
+      </TranzmitProvider>
+    );
+
+    await waitFor(() => expect(onFallback).toHaveBeenCalledWith({
+      trigger: "missing_trigger",
+      reason: "placement_not_found",
+    }));
   });
 
   it("tracks dismissals from the rendered paywall", async () => {
@@ -155,4 +205,52 @@ describe("TranzmitProvider", () => {
       expect.stringContaining("/v1/paywall-documents/"),
     );
   });
+
+  it("calls fallback when the WebView renderer fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          ...mockConfig,
+          placements: {
+            upgrade_pro: {
+              ...mockConfig.placements.upgrade_pro,
+              spec: {
+                ...mockConfig.placements.upgrade_pro.spec,
+                document: {
+                  html: "<main data-trigger-webview-error><h1>Broken Paywall</h1></main>",
+                },
+              },
+            },
+          },
+        }),
+      })
+    );
+    const onFallback = vi.fn();
+    render(
+      <TranzmitProvider publicKey="pk_test_demo">
+        <RenderErrorHarness onFallback={onFallback} />
+      </TranzmitProvider>
+    );
+
+    await waitFor(() => expect(onFallback).toHaveBeenCalledWith(expect.objectContaining({
+      trigger: "upgrade_pro",
+      reason: "render_error",
+      error: expect.any(Error),
+      variantId: "var_a",
+    })));
+  });
 });
+
+function RenderErrorHarness({ onFallback }: { onFallback?: any }) {
+  const { isReady, gate } = useTranzmit();
+
+  useEffect(() => {
+    if (isReady) {
+      gate("upgrade_pro", { onFallback });
+    }
+  }, [gate, isReady, onFallback]);
+
+  return null;
+}

@@ -16,6 +16,7 @@ export interface SpecRendererProps {
   presentation?: PresentationMode;
   onCTA: (product: ProductSpec) => void;
   onDismiss: () => void;
+  onError?: (error: Error) => void;
 }
 
 export function SpecRenderer({
@@ -23,6 +24,7 @@ export function SpecRenderer({
   presentation = "sheet",
   onCTA,
   onDismiss,
+  onError,
 }: SpecRendererProps) {
   const windowSize = useWindowDimensions();
   const insets = useSafeAreaInsets ? useSafeAreaInsets() : { top: 0, bottom: 0, left: 0, right: 0 };
@@ -79,6 +81,10 @@ export function SpecRenderer({
     });
   };
 
+  const handleRenderError = (event: unknown) => {
+    onError?.(webViewError(event));
+  };
+
   return (
     <View
       onLayout={handleLayout}
@@ -95,6 +101,9 @@ export function SpecRenderer({
         javaScriptEnabled
         domStorageEnabled={false}
         onMessage={handleMessage}
+        onError={handleRenderError}
+        onHttpError={handleRenderError}
+        onContentProcessDidTerminate={() => onError?.(new Error("Tranzmit WebView content process terminated"))}
         onShouldStartLoadWithRequest={shouldStart}
         showsVerticalScrollIndicator={false}
         showsHorizontalScrollIndicator={false}
@@ -103,6 +112,21 @@ export function SpecRenderer({
       />
     </View>
   );
+}
+
+function webViewError(event: unknown) {
+  const nativeEvent = typeof event === "object" && event !== null && "nativeEvent" in event
+    ? (event as { nativeEvent?: Record<string, unknown> }).nativeEvent
+    : undefined;
+  const description = stringValue(nativeEvent?.description)
+    || stringValue(nativeEvent?.title)
+    || stringValue(nativeEvent?.code)
+    || "Tranzmit WebView failed to render";
+  return new Error(description);
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" || typeof value === "number" ? String(value) : "";
 }
 
 function heightForPresentation(presentation: PresentationMode) {

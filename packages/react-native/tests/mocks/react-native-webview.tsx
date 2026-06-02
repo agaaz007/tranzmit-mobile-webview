@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 export interface WebViewMessageEvent {
   nativeEvent: { data: string };
@@ -8,8 +8,14 @@ export interface WebViewNavigation {
   url: string;
 }
 
-export default function WebView({ source, onMessage }: any) {
+export default function WebView({ source, onMessage, onError }: any) {
   const html = source?.html || "";
+  useEffect(() => {
+    if (html.includes("data-trigger-webview-error")) {
+      onError?.({ nativeEvent: { description: "Simulated WebView failure" } });
+    }
+  }, [html, onError]);
+
   const body = html
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<script[\s\S]*?<\/script>/gi, "");

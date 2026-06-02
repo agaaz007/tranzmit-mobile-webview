@@ -41,9 +41,7 @@ If paywalls are login-only, you can instead mount `TranzmitProvider` only after 
 Tranzmit only owns the paywall UI and WebView bridge. Your app owns the actual purchase:
 
 ```tsx
-const { gate, reportConversion, refreshConfig, isReady } = useTranzmit();
-
-if (!isReady) return;
+const { gate, reportConversion, refreshConfig } = useTranzmit();
 
 gate("upgrade_pro", {
   onCTA: async (product) => {
@@ -54,6 +52,10 @@ gate("upgrade_pro", {
       revenue: 9.99,
       currency: "USD",
     });
+  },
+  onFallback: ({ reason }) => {
+    console.warn("[Tranzmit] fallback", reason);
+    openExistingInAppPaywall();
   },
 });
 

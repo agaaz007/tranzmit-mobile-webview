@@ -83,10 +83,16 @@ export function TranzmitProvider({
 
   const gate = useCallback((trigger: string, options: GateOptions = {}): GateResult => {
     const client = clientRef.current;
-    if (!client?.isReady()) return noopResult;
+    if (!client?.isReady()) {
+      options.onFallback?.({ trigger, reason: "not_ready" });
+      return noopResult;
+    }
 
     const placement = client.getPlacement(trigger);
-    if (!placement) return noopResult;
+    if (!placement) {
+      options.onFallback?.({ trigger, reason: "placement_not_found" });
+      return noopResult;
+    }
 
     const existing = activeRef.current.get(trigger);
     if (existing) {
@@ -116,6 +122,22 @@ export function TranzmitProvider({
       variantId: placement.variantId,
       dismiss: () => dismissPaywall(active.id, true),
     };
+  }, [dismissPaywall]);
+
+  const handlePaywallError = useCallback((active: ActivePaywall, error: Error) => {
+    clientRef.current?.track("paywall_error", {
+      ...attribution(active.trigger, active.placement),
+      reason: "render_error",
+      message: error.message,
+    });
+    dismissPaywall(active.id, false);
+    active.options.onFallback?.({
+      trigger: active.trigger,
+      reason: "render_error",
+      error,
+      placement: active.placement,
+      variantId: active.placement.variantId,
+    });
   }, [dismissPaywall]);
 
   const track = useCallback((event: string, properties?: Record<string, unknown>) => {
@@ -161,6 +183,7 @@ export function TranzmitProvider({
           active.options.onCTA?.(product);
         }}
         onDismiss={(active) => dismissPaywall(active.id, true)}
+        onError={handlePaywallError}
       />
     </TranzmitContext.Provider>
   );

@@ -45,6 +45,10 @@ vi.mock("../src/statsig.js", () => ({
   isInitialized: vi.fn(() => false),
 }));
 
+beforeEach(() => {
+  process.env.PUBLIC_API_BASE_URL = "https://api.example.test";
+});
+
 async function makeRequest(
   path: string,
   method = "GET",

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { PlacementConfig, ProductSpec } from "@tranzmit/shared";
 
 export type PresentationMode = "modal" | "sheet" | "fullscreen" | "inline";
+export type FallbackReason = "not_ready" | "placement_not_found" | "render_error";
 
 export interface TranzmitProviderProps {
   publicKey: string;
@@ -18,8 +19,17 @@ export interface TranzmitProviderProps {
 export interface GateOptions {
   onCTA?: (product: ProductSpec) => void;
   onDismiss?: () => void;
+  onFallback?: (event: FallbackEvent) => void;
   onImpression?: () => void;
   presentation?: PresentationMode;
+}
+
+export interface FallbackEvent {
+  trigger: string;
+  reason: FallbackReason;
+  error?: Error;
+  placement?: PlacementConfig;
+  variantId?: string;
 }
 
 export interface GateResult {

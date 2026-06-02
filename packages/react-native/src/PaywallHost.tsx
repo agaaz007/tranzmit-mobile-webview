@@ -8,9 +8,10 @@ export interface PaywallHostProps {
   activePaywalls: ActivePaywall[];
   onCTA: (active: ActivePaywall, product: ProductSpec) => void;
   onDismiss: (active: ActivePaywall) => void;
+  onError: (active: ActivePaywall, error: Error) => void;
 }
 
-export function PaywallHost({ activePaywalls, onCTA, onDismiss }: PaywallHostProps) {
+export function PaywallHost({ activePaywalls, onCTA, onDismiss, onError }: PaywallHostProps) {
   return (
     <>
       {activePaywalls.map((active) => {
@@ -19,12 +20,13 @@ export function PaywallHost({ activePaywalls, onCTA, onDismiss }: PaywallHostPro
             spec={active.placement.spec}
             onCTA={(product) => onCTA(active, product)}
             onDismiss={() => onDismiss(active)}
+            onError={(error) => onError(active, error)}
             presentation={active.presentation}
           />
         );
 
         if (active.presentation === "inline") {
-          return <SpecRenderer key={active.id} spec={active.placement.spec} onCTA={(product) => onCTA(active, product)} onDismiss={() => onDismiss(active)} presentation="inline" />;
+          return <SpecRenderer key={active.id} spec={active.placement.spec} onCTA={(product) => onCTA(active, product)} onDismiss={() => onDismiss(active)} onError={(error) => onError(active, error)} presentation="inline" />;
         }
 
         if (active.presentation === "modal") {
