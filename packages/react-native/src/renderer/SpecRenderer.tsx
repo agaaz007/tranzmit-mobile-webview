@@ -239,6 +239,19 @@ ${viewportCss}
   .tz-presentation-fullscreen .tranzmit-paywall .close {
     display: none !important;
   }
+  .tz-presentation-fullscreen .influish_annual_pro .tz-close {
+    display: block !important;
+    width: 22px !important;
+    height: 22px !important;
+    line-height: 22px !important;
+    font-size: 22px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    color: #5f5a6b !important;
+    left: clamp(14px, 4vw, 22px) !important;
+    top: clamp(14px, 4vw, 22px) !important;
+  }
   @media (max-height: 880px) {
     .tz-presentation-fullscreen .influish_intro_offer {
       gap: clamp(4px, 0.75vh, 8px) !important;

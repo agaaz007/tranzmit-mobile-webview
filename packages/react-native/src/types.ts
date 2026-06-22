@@ -54,6 +54,7 @@ export interface TranzmitContextValue {
   track: (event: string, properties?: Record<string, unknown>) => void;
   reportConversion: (data: ReportConversionData) => void;
   refreshConfig: () => Promise<void>;
+  setTraits: (traits: Record<string, unknown>, options?: { merge?: boolean }) => Promise<void>;
   flush: () => Promise<void>;
   getPlacement: (trigger: string) => PlacementConfig | null;
 }

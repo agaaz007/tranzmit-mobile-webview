@@ -1328,7 +1328,11 @@ function buildClientSetup(input: {
     experimentTip: string;
   } | null;
 } {
-  const reactNativeSnippet = `import { Button } from "react-native";
+  const reactNativeSnippet = `// Install:
+// npm install @tranzmit/react-native
+// npm install @react-native-async-storage/async-storage react-native-webview react-native-safe-area-context
+
+import { Button } from "react-native";
 import { TranzmitProvider, useTranzmit } from "@tranzmit/react-native";
 
 export default function App() {
@@ -1358,10 +1362,18 @@ function PaywallGate() {
     });
   }
 
+  function openExistingPaywall(reason) {
+    // Fallback keeps monetization working if the hosted paywall cannot open.
+    console.warn("[Tranzmit] opening existing paywall fallback", reason);
+  }
+
   return (
     <Button
       title="Upgrade"
-      onPress={() => gate("upgrade_pro", { onCTA: startNativePurchase })}
+      onPress={() => gate("upgrade_pro", {
+        onCTA: startNativePurchase,
+        onFallback: ({ reason }) => openExistingPaywall(reason),
+      })}
     />
   );
 }

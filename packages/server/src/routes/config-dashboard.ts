@@ -1161,6 +1161,7 @@ const DASHBOARD_HTML = `<!doctype html>
         var defaultSpec = findSpec(p.default_spec_id);
         var variants = Array.isArray(p.variants) ? p.variants : [];
         var experimentId = p.statsig_experiment_id || p.experiment_id || '';
+        var targetingRulesHtml = renderTargetingRules(p);
         var variantsHtml = variants.length
           ? variants.map(function(v) {
               var spec = findSpec(v.spec_id);
@@ -1192,6 +1193,7 @@ const DASHBOARD_HTML = `<!doctype html>
               }).join('') + '</select></div>' +
               '<div class="field"><span class="field-label">Statsig experiment ID</span><input data-experiment="' + escAttr(p.id) + '" value="' + escAttr(experimentId) + '" placeholder="e.g. paywall_intro_vs_trial"></div>' +
             '</div>' +
+            targetingRulesHtml +
             '<div class="row" style="justify-content:flex-end;"><button class="btn btn-accent btn-sm" data-save-placement="' + escAttr(p.id) + '">Save placement</button></div>' +
             '<div class="card-sub" style="margin-top:4px;border-top:1px solid var(--line);padding-top:10px;"><b>Variants</b> — keys must match the <span class="mono">variant_id</span> values returned by the Statsig experiment.</div>' +
             variantsHtml +
@@ -1217,6 +1219,15 @@ const DASHBOARD_HTML = `<!doctype html>
       Array.prototype.forEach.call(els.placementsList.querySelectorAll('[data-add-variant]'), function(btn) {
         btn.addEventListener('click', function() { addVariant(btn.getAttribute('data-add-variant')); });
       });
+      Array.prototype.forEach.call(els.placementsList.querySelectorAll('[data-add-targeting-rule]'), function(btn) {
+        btn.addEventListener('click', function() { addTargetingRuleRow(btn.getAttribute('data-add-targeting-rule')); });
+      });
+      Array.prototype.forEach.call(els.placementsList.querySelectorAll('[data-delete-targeting-rule]'), function(btn) {
+        btn.addEventListener('click', function() {
+          var row = btn.closest('[data-targeting-rule-row]');
+          if (row) row.remove();
+        });
+      });
       Array.prototype.forEach.call(els.placementsList.querySelectorAll('.variant'), function(row) {
         var placementId = row.getAttribute('data-placement');
         var variantKey = row.getAttribute('data-variant-key');
@@ -1227,18 +1238,72 @@ const DASHBOARD_HTML = `<!doctype html>
       });
     }
 
+    function renderTargetingRules(placement) {
+      var rules = Array.isArray(placement.targeting_rules) ? placement.targeting_rules : [];
+      var rows = rules.length
+        ? rules.map(function(rule) { return renderTargetingRuleRow(placement.id, rule); }).join('')
+        : renderTargetingRuleRow(placement.id, null);
+      return '<div class="field">' +
+        '<span class="field-label">Intent experiment routing</span>' +
+        '<div class="hint">Optional. First matching intent wins. Language is handled by the SDK locale prop, so only use routing for different paywall choices.</div>' +
+        '<div class="stack" data-targeting-rules-list="' + escAttr(placement.id) + '" style="margin-top:8px;">' + rows + '</div>' +
+        '<button class="btn btn-sm" type="button" data-add-targeting-rule="' + escAttr(placement.id) + '">+ Add intent rule</button>' +
+      '</div>';
+    }
+
+    function renderTargetingRuleRow(placementId, rule) {
+      var when = rule && rule.when && typeof rule.when === 'object' && !Array.isArray(rule.when) ? rule.when : {};
+      var experimentId = rule && (rule.statsig_experiment_id || rule.experiment_id || rule.experimentId) || '';
+      return '<div class="row targeting-rule-row" data-targeting-rule-row="' + escAttr(placementId) + '" style="align-items:flex-end;gap:8px;flex-wrap:wrap;">' +
+        '<div class="field" style="min-width:120px;flex:1;margin:0;"><span class="field-label">Intent</span><input data-rule-intent value="' + escAttr(when.intent || '') + '" placeholder="wealth"></div>' +
+        '<div class="field" style="min-width:220px;flex:2;margin:0;"><span class="field-label">Statsig experiment ID</span><input data-rule-experiment value="' + escAttr(experimentId) + '" placeholder="hiastro-testing"></div>' +
+        '<button class="btn btn-sm btn-danger" type="button" data-delete-targeting-rule>Remove</button>' +
+      '</div>';
+    }
+
+    function addTargetingRuleRow(placementId) {
+      var list = els.placementsList.querySelector('[data-targeting-rules-list="' + cssEscape(placementId) + '"]');
+      if (!list) return;
+      list.insertAdjacentHTML('beforeend', renderTargetingRuleRow(placementId, null));
+      var removeBtn = list.lastElementChild && list.lastElementChild.querySelector('[data-delete-targeting-rule]');
+      if (removeBtn) {
+        removeBtn.addEventListener('click', function() {
+          var row = removeBtn.closest('[data-targeting-rule-row]');
+          if (row) row.remove();
+        });
+      }
+    }
+
     async function savePlacement(id) {
       try {
         var defaultSpecSelect = els.placementsList.querySelector('[data-default-spec="' + cssEscape(id) + '"]');
         var experimentInput = els.placementsList.querySelector('[data-experiment="' + cssEscape(id) + '"]');
+        var targetingRules = readTargetingRuleRows(id);
         var payload = {
           default_spec_id: defaultSpecSelect ? defaultSpecSelect.value : null,
           statsig_experiment_id: experimentInput ? experimentInput.value.trim() : null,
+          targeting_rules: targetingRules,
         };
         await api('/admin/placements/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(payload) });
         await loadClientData();
         toast('Placement saved');
       } catch (err) { toast(err.message || 'Save failed'); }
+    }
+    function readTargetingRuleRows(id) {
+      return Array.prototype.slice.call(els.placementsList.querySelectorAll('[data-targeting-rule-row="' + cssEscape(id) + '"]'))
+        .map(function(row) {
+          var intent = (row.querySelector('[data-rule-intent]')?.value || '').trim();
+          var experimentId = (row.querySelector('[data-rule-experiment]')?.value || '').trim();
+          if (!intent && !experimentId) return null;
+          if (!intent || !experimentId) {
+            throw new Error('Each routing rule needs intent and Statsig experiment ID');
+          }
+          return {
+            when: { intent: intent },
+            statsig_experiment_id: experimentId,
+          };
+        })
+        .filter(Boolean);
     }
     async function togglePlacement(id) {
       var placement = state.placements.find(function(p) { return p.id === id; });

@@ -40,7 +40,7 @@ export async function getVariantAssignment(
   if (!server) return defaultVariant;
 
   try {
-    const experiment = server.getExperimentSync(toStatsigUser(identity), experimentId);
+    const experiment = server.getExperimentSync(mapIdentityToStatsigUser(identity), experimentId);
     return (experiment.get("variant_id", defaultVariant) as string) || defaultVariant;
   } catch {
     return defaultVariant;
@@ -63,7 +63,7 @@ export async function logStatsigEvents(batch: {
   const server = await getStatsigServer(projectConfig);
   if (!server) return;
 
-  const user = toStatsigUser(batch.identity);
+  const user = mapIdentityToStatsigUser(batch.identity);
 
   for (const evt of batch.events) {
     if (!evt.event || typeof evt.event !== "string") continue;
@@ -200,17 +200,24 @@ async function getStatsigServer(projectConfig?: StatsigProjectConfig): Promise<S
   }
 }
 
-function toStatsigUser(identity: ResolvedIdentity): StatsigUser {
+export function mapIdentityToStatsigUser(identity: ResolvedIdentity): StatsigUser {
   const customIDs: Record<string, string> = {
     ...identity.identifiers,
   };
   if (identity.userId) customIDs.tranzmitUserID = identity.userId;
 
-  const user: StatsigUser = Object.keys(customIDs).length > 0
-    ? { customIDs }
-    : { userID: identity.storageUserId };
+  // Statsig experiments that randomize on "User ID" need userID set on every
+  // request. Logged-in apps pass the real app user id; logged-out installs
+  // fall back to stableID so anonymous traffic still buckets consistently.
+  const statsigUserId =
+    identity.userId ??
+    identity.identifiers.stableID ??
+    identity.storageUserId;
 
-  if (identity.userId) user.userID = identity.userId;
+  const user: StatsigUser = {
+    userID: statsigUserId,
+    ...(Object.keys(customIDs).length > 0 ? { customIDs } : {}),
+  };
   user.custom = normalizeStatsigValues(identity.traits);
   const privateAttributes = normalizeStatsigValues(identity.privateTraits);
   if (Object.keys(privateAttributes).length > 0) {

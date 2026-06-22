@@ -6,6 +6,13 @@ import { resolveConfigIdentity } from "../identity.js";
 import { getVariantAssignment } from "../statsig.js";
 import { configTtlSeconds, ensureWebViewSpec, publicApiBaseUrl, shouldInlineDocuments } from "../webview-documents.js";
 
+type TargetingRule = {
+  when?: Record<string, unknown>;
+  statsig_experiment_id?: unknown;
+  experiment_id?: unknown;
+  experimentId?: unknown;
+};
+
 export async function handleConfig(
   req: IncomingMessage,
   res: ServerResponse
@@ -48,10 +55,11 @@ export async function handleConfig(
     }
 
     let assignedVariantId = defaultVariant;
-    if (row.experiment_id) {
+    const experimentId = resolveExperimentId(row.targeting_rules, identity.traits, row.experiment_id);
+    if (experimentId) {
       assignedVariantId = await getVariantAssignment(
         identity,
-        row.experiment_id,
+        experimentId,
         defaultVariant,
         {
           projectName: row.statsig_project_name,
@@ -147,6 +155,50 @@ function selectVariant(
   const first = available[0];
   if (first) return { variantId: first.variant_id, spec: first.spec };
   return { variantId: defaultVariant, spec: undefined };
+}
+
+function resolveExperimentId(
+  targetingRules: unknown,
+  traits: Record<string, unknown>,
+  fallbackExperimentId: string | null
+): string | null {
+  for (const rule of normalizeTargetingRules(targetingRules)) {
+    if (!matchesTraits(rule.when, traits)) continue;
+    const experimentId = normalizeExperimentId(rule.statsig_experiment_id ?? rule.experiment_id ?? rule.experimentId);
+    if (experimentId) return experimentId;
+  }
+  return fallbackExperimentId;
+}
+
+function normalizeTargetingRules(value: unknown): TargetingRule[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is TargetingRule => Boolean(item) && typeof item === "object" && !Array.isArray(item));
+}
+
+function matchesTraits(when: TargetingRule["when"], traits: Record<string, unknown>): boolean {
+  if (!when || typeof when !== "object" || Array.isArray(when)) return false;
+  const entries = Object.entries(when);
+  if (entries.length === 0) return false;
+  return entries.every(([key, expected]) => traitMatches(traits[key], expected));
+}
+
+function traitMatches(actual: unknown, expected: unknown): boolean {
+  if (Array.isArray(expected)) {
+    return expected.some((item) => traitMatches(actual, item));
+  }
+  if (Array.isArray(actual)) {
+    return actual.some((item) => traitMatches(item, expected));
+  }
+  if (!isComparableTrait(actual) || !isComparableTrait(expected)) return false;
+  return actual === expected;
+}
+
+function isComparableTrait(value: unknown): value is string | number | boolean {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
+function normalizeExperimentId(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function parseUserTraits(raw: string | null): Record<string, unknown> | undefined {

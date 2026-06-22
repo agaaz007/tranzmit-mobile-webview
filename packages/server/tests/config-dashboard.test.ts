@@ -57,6 +57,20 @@ describe("config dashboard product editing", () => {
     expect(css).toContain(".countdown-trigger");
   });
 
+  it("exposes intent routing as explicit placement fields", () => {
+    const html = renderDashboard();
+
+    expect(html).toContain("Intent experiment routing");
+    expect(html).toContain("Language is handled by the SDK locale prop");
+    expect(html).toContain("data-rule-intent");
+    expect(html).toContain("data-rule-experiment");
+    expect(html).toContain("data-add-targeting-rule");
+    expect(html).toContain("readTargetingRuleRows");
+    expect(html).toContain("statsig_experiment_id: experimentId");
+    expect(html).not.toContain("data-rule-language");
+    expect(html).not.toContain("Targeting rules JSON");
+  });
+
   it("serves valid inline dashboard JavaScript", () => {
     const html = renderDashboard();
     const match = html.match(/<script>([\s\S]*?)<\/script>/);

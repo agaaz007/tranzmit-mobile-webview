@@ -63,7 +63,7 @@ export function ensureWebViewSpec(spec: unknown, context?: WebViewDocumentContex
   const contentHash = hashDocument({ html, css, js, baseUrl });
   const revision = `doc-${contentHash.slice(0, 12)}`;
   const cacheKey = `${next.templateId}:${revision}`;
-  const integrity = `sha256-${contentHash}`;
+  const integrity = sha256Integrity(html);
   const includeInline = context?.includeInline ?? true;
 
   next.revision = revision;
@@ -105,8 +105,12 @@ export function webViewDocumentPayload(spec: unknown, context?: WebViewDocumentC
     baseUrl: document.baseUrl,
     cacheKey: normalized.cacheKey,
     revision: normalized.revision,
-    integrity: document.integrity || `sha256-${hashDocument(document)}`,
+    integrity: document.integrity || sha256Integrity(document.html || ""),
   };
+}
+
+export function sha256Integrity(content: string): string {
+  return `sha256-${createHash("sha256").update(content).digest("base64")}`;
 }
 
 export function hashDocument(document: { html?: string; css?: string; js?: string; baseUrl?: string }): string {

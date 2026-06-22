@@ -1,9 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { TranzmitProvider, useTranzmit } from "../src/index.js";
-import { mockConfig } from "./fixtures.js";
+import { baseSpec, mockConfig } from "./fixtures.js";
 
 function GateHarness({ onCTA, onDismiss }: { onCTA?: any; onDismiss?: any }) {
   const { isReady, gate } = useTranzmit();
@@ -41,6 +41,22 @@ function MissingPlacementHarness({ onFallback }: { onFallback?: any }) {
   }, [gate, isReady, onFallback]);
 
   return null;
+}
+
+function SetTraitsGateHarness({ onGate }: { onGate?: any }) {
+  const { isReady, setTraits, gate } = useTranzmit();
+  const [didRoute, setDidRoute] = useState(false);
+
+  useEffect(() => {
+    if (!isReady || didRoute) return;
+    setDidRoute(true);
+    void (async () => {
+      await setTraits({ intent: "wealth" });
+      onGate?.(gate("upgrade_pro", { presentation: "modal" }));
+    })();
+  }, [didRoute, gate, isReady, onGate, setTraits]);
+
+  return <div>{isReady ? "ready" : "loading"}</div>;
 }
 
 describe("TranzmitProvider", () => {
@@ -152,6 +168,65 @@ describe("TranzmitProvider", () => {
     await waitFor(() => expect(getByText("ready")).toBeTruthy());
     const configBody = JSON.parse(fetchMock.mock.calls[1][1]!.body as string);
     expect(configBody.identity.userId).toBe("user_123");
+  });
+
+  it("merges runtime traits, refetches config, and gates the routed placement", async () => {
+    const routedConfig = {
+      ...mockConfig,
+      placements: {
+        upgrade_pro: {
+          ...mockConfig.placements.upgrade_pro,
+          variantId: "wealth_arm",
+          variant_key: "wealth_arm",
+          spec: {
+            ...baseSpec,
+            header: {
+              ...baseSpec.header,
+              title: "Hindi Wealth",
+            },
+            document: {
+              ...baseSpec.document,
+              html: `
+                <main class="paywall">
+                  <h1>Hindi Wealth</h1>
+                  <button data-tranzmit-action="cta" data-product-id="pro_monthly">Start Wealth Trial</button>
+                </main>
+              `,
+            },
+          },
+        },
+      },
+    };
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(init.body as string) : {};
+      return {
+        ok: true,
+        json: () => Promise.resolve(body.traits?.intent === "wealth" ? routedConfig : mockConfig),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const onGate = vi.fn();
+    const { getByText } = render(
+      <TranzmitProvider publicKey="pk_test_demo" userTraits={{ plan: "free" }}>
+        <SetTraitsGateHarness onGate={onGate} />
+      </TranzmitProvider>
+    );
+
+    await waitFor(() => expect(getByText("Hindi Wealth")).toBeTruthy());
+    await waitFor(() => expect(onGate).toHaveBeenCalledWith(expect.objectContaining({
+      shown: true,
+      variantId: "wealth_arm",
+    })));
+
+    const configBodies = fetchMock.mock.calls
+      .filter(([url]) => String(url).endsWith("/v1/config"))
+      .map(([, init]) => JSON.parse(init!.body as string));
+    expect(configBodies[0].traits).toEqual({ plan: "free" });
+    expect(configBodies[configBodies.length - 1].traits).toMatchObject({
+      plan: "free",
+      intent: "wealth",
+    });
   });
 
   it("hydrates hosted WebView documents before rendering", async () => {

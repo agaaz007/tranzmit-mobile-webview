@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createHash } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { ConfigResponse } from "@tranzmit/shared";
 
@@ -159,6 +160,32 @@ describe("GET /config", () => {
 	    expect(before.document.url).not.toBe(after.document.url);
 	  });
 
+	  it("sets hosted document integrity from the exact HTML payload", async () => {
+	    const { ensureWebViewSpec, webViewDocumentPayload } = await import("../src/webview-documents.js");
+	    const context = {
+	      publicKey: "pk_test_valid",
+	      placementId: "pl_1",
+	      variantKey: "var_1",
+	      apiBaseUrl: "https://api.example.test",
+	      includeInline: false,
+	    };
+	    const rawSpec = {
+	      renderer: "webview",
+	      templateId: "paywall",
+	      document: {
+	        html: "<main><h1>Welcome</h1></main>",
+	        css: "h1{color:purple}",
+	      },
+	      products: [],
+	    };
+	    const configSpec = ensureWebViewSpec(rawSpec, context);
+	    const payload = webViewDocumentPayload(rawSpec, context);
+	    const expected = `sha256-${createHash("sha256").update(payload.html).digest("base64")}`;
+
+	    expect(configSpec.document.integrity).toBe(expected);
+	    expect(payload.integrity).toBe(expected);
+	  });
+
 	  it("returns the Statsig-assigned variant spec", async () => {
 	    const db = await import("../src/db.js");
 	    const statsig = await import("../src/statsig.js");
@@ -215,6 +242,130 @@ describe("GET /config", () => {
 	      }),
 	      "paywall_experiment",
 	      "var_default",
+	      expect.objectContaining({})
+	    );
+	  });
+
+	  it("uses the first intent targeting rule to choose the Statsig experiment", async () => {
+	    const db = await import("../src/db.js");
+	    const statsig = await import("../src/statsig.js");
+	    vi.mocked(db.getPlacementsForKey).mockResolvedValueOnce([
+	      {
+	        id: "pl_1",
+	        trigger: "upgrade_pro",
+	        enabled: true,
+	        default_variant_id: "control",
+	        experiment_id: "fallback_experiment",
+	        targeting_rules: [
+	          {
+	            when: { intent: "wealth" },
+	            statsig_experiment_id: "paywall_wealth",
+	          },
+	          {
+	            when: { intent: "love" },
+	            statsig_experiment_id: "paywall_love",
+	          },
+	        ],
+	        spec: { layout: "compact", headline: "Control", cta: "Default", theme: "light", products: [] },
+	        variants: [
+	          {
+	            id: "pv_control",
+	            variant_id: "control",
+	            enabled: true,
+	            fallback_rank: 0,
+	            spec: { layout: "compact", headline: "Control", cta: "Default", theme: "light", products: [] },
+	          },
+	          {
+	            id: "pv_wealth",
+	            variant_id: "wealth_arm",
+	            enabled: true,
+	            fallback_rank: 1,
+	            spec: { layout: "compact", headline: "Hindi Wealth", cta: "Try Wealth", theme: "light", products: [] },
+	          },
+	        ],
+	      },
+	    ] as any);
+	    vi.mocked(statsig.getVariantAssignment).mockResolvedValueOnce("wealth_arm");
+
+	    const res = await makeRequest(
+	      "/config",
+	      "POST",
+	      JSON.stringify({
+	        publicKey: "pk_test_valid",
+	        identity: { identifiers: { stableID: "stable_1" } },
+	        traits: { intent: "wealth" },
+	      })
+	    );
+
+	    expect(res.status).toBe(200);
+	    const config: ConfigResponse = JSON.parse(res.body);
+	    expect(config.placements.upgrade_pro.variantId).toBe("wealth_arm");
+	    expect(config.placements.upgrade_pro.spec.headline).toBe("Hindi Wealth");
+	    expect(vi.mocked(statsig.getVariantAssignment)).toHaveBeenCalledWith(
+	      expect.objectContaining({
+	        traits: expect.objectContaining({ intent: "wealth" }),
+	      }),
+	      "paywall_wealth",
+	      "control",
+	      expect.objectContaining({})
+	    );
+	  });
+
+	  it("falls back to the placement experiment when intent does not match a targeting rule", async () => {
+	    const db = await import("../src/db.js");
+	    const statsig = await import("../src/statsig.js");
+	    vi.mocked(db.getPlacementsForKey).mockResolvedValueOnce([
+	      {
+	        id: "pl_1",
+	        trigger: "upgrade_pro",
+	        enabled: true,
+	        default_variant_id: "control",
+	        experiment_id: "fallback_experiment",
+	        targeting_rules: [
+	          {
+	            when: { intent: "wealth" },
+	            statsig_experiment_id: "paywall_wealth",
+	          },
+	        ],
+	        spec: { layout: "compact", headline: "Control", cta: "Default", theme: "light", products: [] },
+	        variants: [
+	          {
+	            id: "pv_control",
+	            variant_id: "control",
+	            enabled: true,
+	            fallback_rank: 0,
+	            spec: { layout: "compact", headline: "Control", cta: "Default", theme: "light", products: [] },
+	          },
+	          {
+	            id: "pv_fallback",
+	            variant_id: "fallback_arm",
+	            enabled: true,
+	            fallback_rank: 1,
+	            spec: { layout: "compact", headline: "Fallback Experiment", cta: "Try Fallback", theme: "light", products: [] },
+	          },
+	        ],
+	      },
+	    ] as any);
+	    vi.mocked(statsig.getVariantAssignment).mockResolvedValueOnce("fallback_arm");
+
+	    const res = await makeRequest(
+	      "/config",
+	      "POST",
+	      JSON.stringify({
+	        publicKey: "pk_test_valid",
+	        identity: { identifiers: { stableID: "stable_1" } },
+	        traits: { intent: "career" },
+	      })
+	    );
+
+	    expect(res.status).toBe(200);
+	    const config: ConfigResponse = JSON.parse(res.body);
+	    expect(config.placements.upgrade_pro.variantId).toBe("fallback_arm");
+	    expect(config.placements.upgrade_pro.spec.headline).toBe("Fallback Experiment");
+	    expect(vi.mocked(statsig.getVariantAssignment)).toHaveBeenCalledWith(
+	      expect.anything(),
+	      "fallback_experiment",
+	      "control",
 	      expect.objectContaining({})
 	    );
 	  });

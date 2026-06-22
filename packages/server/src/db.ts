@@ -21,6 +21,7 @@ export async function getPlacementsForKey(publicKey: string) {
     placement_id: string;
     default_variant_id: string;
     experiment_id: string | null;
+    targeting_rules: unknown;
     statsig_project_name: string | null;
     statsig_server_secret_env_var: string;
     spec: unknown;
@@ -41,6 +42,7 @@ export async function getPlacementsForKey(publicKey: string) {
        COALESCE(p.status, CASE WHEN p.enabled THEN 'active' ELSE 'paused' END) AS status,
        p.variant_id AS default_variant_id,
        COALESCE(p.statsig_experiment_id, p.experiment_id) AS experiment_id,
+       p.targeting_rules,
        c.statsig_project_name,
        COALESCE(NULLIF(c.statsig_server_secret_env_var, ''), 'STATSIG_SERVER_SECRET') AS statsig_server_secret_env_var,
        CASE

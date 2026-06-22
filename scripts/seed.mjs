@@ -24,6 +24,9 @@ const SEED_ANNUAL_PRICE = Number(process.env.SEED_ANNUAL_PRICE || 999);
 const SEED_ORIGINAL_PRICE = Number(process.env.SEED_ORIGINAL_PRICE || 5988);
 const SEED_INCLUDE_ORIGINAL_PAYWALL = process.env.SEED_INCLUDE_ORIGINAL_PAYWALL !== "false";
 const SEED_VARIANT_PROFILE = process.env.SEED_VARIANT_PROFILE || "default";
+const SEED_STATSIG_EXPERIMENT_ID = Object.prototype.hasOwnProperty.call(process.env, "SEED_STATSIG_EXPERIMENT_ID")
+  ? (process.env.SEED_STATSIG_EXPERIMENT_ID || "").trim() || null
+  : undefined;
 
 function resolveInfluishLogoSrc() {
   if (process.env.SEED_LOGO_SRC) return process.env.SEED_LOGO_SRC;
@@ -295,7 +298,7 @@ function buildCss(spec) {
 body{font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;color:${text};}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 .tz-paywall{min-height:var(--tz-vh,100svh);background:radial-gradient(circle at 50% 38%,rgba(118,59,232,.13),transparent 34%),linear-gradient(180deg,#fff 0%,#fbf8ff 100%);padding:clamp(18px,4.8vw,28px) clamp(18px,5.2vw,30px);padding-bottom:calc(clamp(84px,22vw,98px) + var(--tz-safe-bottom,env(safe-area-inset-bottom)));border-radius:clamp(20px,7vw,28px);text-align:center;position:relative;overflow-x:hidden;overflow-y:auto;display:flex;flex-direction:column;color:${text};transfolrm-origin:top center}
-.tz-close{position:absolute;left:clamp(14px,4vw,22px);top:clamp(14px,4vw,22px);border:0;background:#fff;border-radius:999px;width:42px;height:42px;font-size:34px;line-height:38px;color:#34303b;z-index:4;box-shadow:0 10px 28px rgba(25,20,40,.08)}
+.tz-close{position:absolute;left:clamp(14px,4vw,22px);top:clamp(14px,4vw,22px);border:0;background:transparent;border-radius:0;width:22px;height:22px;font-size:22px;line-height:22px;color:#5f5a6b;z-index:4;box-shadow:none;padding:0}
 .tz-close-right{left:auto;right:clamp(16px,4vw,24px);background:transparent;box-shadow:none;color:#7d7784;font-size:36px}
 .brand{display:flex;justify-content:center;align-items:center;gap:8px;font-size:clamp(20px,5.5vw,25px);font-weight:900;margin:clamp(8px,1.6vh,18px) 46px clamp(10px,2vh,18px)}
 .mark:not(.influish-logo){width:34px;height:38px;display:grid;place-items:center;background:${accent};color:#fff;font-family:Georgia,serif;font-weight:900;font-size:24px;clip-path:polygon(0 0,100% 0,100% 100%,50% 78%,0 100%)}
@@ -379,6 +382,7 @@ h1 span{color:${accent}}
 }
 .tz-presentation-fullscreen .tz-paywall{width:var(--tz-vw,100vw)!important;height:var(--tz-vh,100svh)!important;min-height:var(--tz-vh,100svh)!important;max-height:var(--tz-vh,100svh)!important;margin:0!important;padding-bottom:calc(var(--tz-safe-bottom,0px) + var(--tz-cta-reserved-height,clamp(86px,10.5vh,108px)))!important;border-radius:0!important;box-shadow:none!important;overflow-y:auto!important}
 .tz-presentation-fullscreen .tz-close,.tz-presentation-fullscreen .close{display:none!important}
+.tz-presentation-fullscreen .influish_annual_pro .tz-close{display:block!important;width:22px!important;height:22px!important;line-height:22px!important;font-size:22px!important;background:transparent!important;box-shadow:none!important;border-radius:0!important;color:#5f5a6b!important;left:clamp(14px,4vw,22px)!important;top:clamp(14px,4vw,22px)!important}
 .tz-presentation-sheet .tz-paywall,.tz-presentation-modal .tz-paywall{border-radius:clamp(20px,7vw,28px)}`;
 }
 
@@ -525,7 +529,7 @@ async function upsertSpec(client, workspaceId, key) {
   return result.rows[0];
 }
 
-async function upsertPlacement(client, publicKey, trigger, defaultSpecId, defaultSpec, experimentId = null) {
+async function upsertPlacement(client, publicKey, trigger, defaultSpecId, defaultSpec, experimentId = undefined) {
   const existing = await client.query(
     `SELECT id FROM placements WHERE public_key = $1 AND trigger = $2`,
     [publicKey, trigger],
@@ -542,13 +546,13 @@ async function upsertPlacement(client, publicKey, trigger, defaultSpecId, defaul
        enabled = true,
        status = 'active',
        variant_id = 'control',
-       experiment_id = EXCLUDED.experiment_id,
-       statsig_experiment_id = EXCLUDED.statsig_experiment_id,
+       experiment_id = CASE WHEN $7 THEN EXCLUDED.experiment_id ELSE placements.experiment_id END,
+       statsig_experiment_id = CASE WHEN $7 THEN EXCLUDED.statsig_experiment_id ELSE placements.statsig_experiment_id END,
        default_spec_id = EXCLUDED.default_spec_id,
        spec = EXCLUDED.spec,
        updated_at = now()
      RETURNING id`,
-    [placementId, publicKey, trigger, experimentId, defaultSpecId, JSON.stringify(defaultSpec)]
+    [placementId, publicKey, trigger, experimentId ?? null, defaultSpecId, JSON.stringify(defaultSpec), experimentId !== undefined]
   );
   return result.rows[0].id;
 }
@@ -651,6 +655,7 @@ async function main() {
       "upgrade_pro",
       savedSpecs[defaultEntry.specKey].id,
       savedSpecs[defaultEntry.specKey].spec,
+      SEED_STATSIG_EXPERIMENT_ID,
     );
 
     for (const entry of profile) {

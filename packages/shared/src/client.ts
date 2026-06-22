@@ -28,6 +28,7 @@ export interface TranzmitError extends Error {
 export interface SharedClient {
   init(config: InitConfig): Promise<void>;
   refreshConfig(): Promise<void>;
+  setTraits(traits: Record<string, unknown>, options?: { merge?: boolean }): Promise<void>;
   getPlacement(trigger: string): PlacementConfig | null;
   track(event: string, properties?: Record<string, unknown>): void;
   reportConversion(data: Record<string, unknown>): void;
@@ -152,6 +153,32 @@ export function createTranzmitClient(
       );
       throw err;
     }
+  }
+
+  async function setTraits(
+    traits: Record<string, unknown>,
+    options?: { merge?: boolean }
+  ): Promise<void> {
+    if (initPromise) {
+      try {
+        await initPromise;
+      } catch {
+        // Init errors are already surfaced via onError; still let the refetch
+        // below try with whatever config/identity has been established.
+      }
+    }
+    if (!currentConfig) return;
+
+    const nextTraits = options?.merge === false
+      ? { ...traits }
+      : { ...(currentConfig.userTraits || {}), ...traits };
+
+    currentConfig = { ...currentConfig, userTraits: nextTraits };
+    if (currentIdentity) {
+      currentInitKey = initKey(currentConfig, currentIdentity);
+    }
+
+    await refreshCurrentConfig();
   }
 
   function getPlacement(trigger: string): PlacementConfig | null {
@@ -279,6 +306,7 @@ export function createTranzmitClient(
   return {
     init,
     refreshConfig: refreshCurrentConfig,
+    setTraits,
     getPlacement,
     track,
     reportConversion,

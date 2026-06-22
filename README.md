@@ -151,7 +151,14 @@ function ExportButton() {
 
 ### React Native
 
-Install `@tranzmit/react-native` plus `@react-native-async-storage/async-storage` and `react-native-webview`.
+The React Native SDK now lives in the standalone [`tranzmit-react-native-sdk`](https://github.com/agaaz007/tranzmit-react-native-sdk) repository.
+
+Install `@tranzmit/react-native` plus `@react-native-async-storage/async-storage`, `react-native-webview`, and `react-native-safe-area-context`.
+
+```bash
+npm install @tranzmit/react-native
+npm install @react-native-async-storage/async-storage react-native-webview react-native-safe-area-context
+```
 
 ```tsx
 import { TranzmitProvider, useTranzmit } from "@tranzmit/react-native";
@@ -196,7 +203,7 @@ function UpgradeButton() {
 }
 ```
 
-See `examples/expo-react-native/` for a runnable Expo testbed.
+See the standalone SDK repo's `example/` folder for a runnable Expo harness.
 
 ### SPA Frameworks (Next.js, Nuxt, SvelteKit, etc.)
 
@@ -369,9 +376,9 @@ This repo owns the mobile SDKs and the mobile config dashboard. The legacy web S
 |---|---|
 | `@tranzmit/shared` | Shared TypeScript types |
 | `@tranzmit/core` | Vanilla JS SDK (config, events, renderer) |
-| `@tranzmit/react-native` | React Native SDK (Provider, paywall rendering, hooks) |
 | `@tranzmit/server` | Mobile config service + event ingestion (Node.js + Postgres) |
 
+The React Native SDK now lives in the standalone [`tranzmit-react-native-sdk`](https://github.com/agaaz007/tranzmit-react-native-sdk) repository.
 The Flutter SDK now lives in the standalone [`tranzmit-flutter-sdk`](https://github.com/agaaz007/tranzmit-flutter-sdk) repository.
 
 ## Server

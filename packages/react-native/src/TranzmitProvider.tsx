@@ -27,8 +27,10 @@ export function TranzmitProvider({
 }: TranzmitProviderProps) {
   const clientRef = useRef<SharedClient | null>(null);
   const activeRef = useRef<Map<string, ActivePaywall>>(new Map());
+  const dynamicTraitsRef = useRef<Record<string, unknown>>({});
   const [isReady, setIsReady] = useState(false);
   const [activePaywalls, setActivePaywalls] = useState<ActivePaywall[]>([]);
+  const [configVersion, setConfigVersion] = useState(0);
 
   if (!clientRef.current) {
     clientRef.current = createTranzmitClient(reactNativeAdapter, reactNativeMetadata);
@@ -62,7 +64,7 @@ export function TranzmitProvider({
         publicKey,
         userId,
         identifiers,
-        userTraits,
+        userTraits: mergeTraits(userTraits, dynamicTraitsRef.current),
         privateTraits,
         apiBaseUrl,
         onError: onError as any,
@@ -158,6 +160,19 @@ export function TranzmitProvider({
     setIsReady(client.isReady());
   }, []);
 
+  const setTraits = useCallback(async (traits: Record<string, unknown>, options?: { merge?: boolean }) => {
+    const client = clientRef.current;
+    if (!client) return;
+
+    dynamicTraitsRef.current = options?.merge === false
+      ? { ...traits }
+      : { ...dynamicTraitsRef.current, ...traits };
+
+    await client.setTraits(traits, options);
+    setIsReady(client.isReady());
+    setConfigVersion((version) => version + 1);
+  }, []);
+
   const value = useMemo<TranzmitContextValue>(() => ({
     isReady,
     ready: isReady,
@@ -165,9 +180,10 @@ export function TranzmitProvider({
     track,
     reportConversion,
     refreshConfig,
+    setTraits,
     flush: () => clientRef.current?.flush() || Promise.resolve(),
     getPlacement: (trigger) => clientRef.current?.getPlacement(trigger) || null,
-  }), [gate, isReady, refreshConfig, reportConversion, track]);
+  }), [configVersion, gate, isReady, refreshConfig, reportConversion, setTraits, track]);
 
   return (
     <TranzmitContext.Provider value={value}>
@@ -205,4 +221,12 @@ function attribution(trigger: string, placement: ActivePaywall["placement"]): Re
     variant_key: variantKey,
     ...(placementId ? { placement_id: placementId } : {}),
   };
+}
+
+function mergeTraits(
+  base?: Record<string, unknown>,
+  dynamic?: Record<string, unknown>
+): Record<string, unknown> | undefined {
+  const merged = { ...(base || {}), ...(dynamic || {}) };
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
