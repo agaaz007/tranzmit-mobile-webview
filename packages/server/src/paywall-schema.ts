@@ -237,6 +237,22 @@ export const paywallSpecSchema = {
         },
       },
     },
+    localization: {
+      type: "object",
+      additionalProperties: false,
+      required: ["defaultLocale", "translations"],
+      properties: {
+        defaultLocale: { type: "string", minLength: 1 },
+        translations: {
+          type: "object",
+          minProperties: 1,
+          additionalProperties: {
+            type: "object",
+            additionalProperties: { type: "string" },
+          },
+        },
+      },
+    },
     metadata: {
       type: "object",
       additionalProperties: { type: "string" },

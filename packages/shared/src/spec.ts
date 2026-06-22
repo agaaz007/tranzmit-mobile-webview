@@ -44,6 +44,13 @@ export interface WebViewBridgeSpec {
   allowedActions?: Array<"cta" | "dismiss" | "custom_action" | "open_url">;
 }
 
+export interface PaywallLocalization {
+  /** Locale used when no active locale is passed by the host app. */
+  defaultLocale: string;
+  /** Locale -> token key -> localized copy. */
+  translations: Record<string, Record<string, string>>;
+}
+
 export type PaywallPresentationMode = "sheet" | "modal" | "fullscreen" | "inline";
 
 export interface PaywallDesignBreakpoint {
@@ -139,6 +146,7 @@ export interface PaywallSpec {
   };
   products: ProductSpec[];
   assets?: AssetManifest;
+  localization?: PaywallLocalization;
   customHtml?: string;
   customCss?: string;
   metadata?: Record<string, string>;
