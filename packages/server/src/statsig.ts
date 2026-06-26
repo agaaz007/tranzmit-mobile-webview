@@ -47,6 +47,46 @@ export async function getVariantAssignment(
   }
 }
 
+/**
+ * Result of consulting a "baseline" Statsig experiment that gates whether the
+ * autotune (intent-based MAB) flow should run.
+ *
+ * Returns null when Statsig is unavailable (server down, secret missing,
+ * experiment lookup throws). Callers MUST treat null as "fall through to the
+ * existing/default flow" so a Statsig outage never breaks the customer's
+ * paywall.
+ */
+export interface BaselineDecision {
+  /** True when the user is in the autotune (intent → MAB) arm. */
+  useAutotune: boolean;
+  /** The control variant id to serve when autotune is false. */
+  variantId: string | null;
+}
+
+export async function getBaselineDecision(
+  identity: ResolvedIdentity,
+  experimentId: string,
+  projectConfig?: StatsigProjectConfig
+): Promise<BaselineDecision | null> {
+  const server = await getStatsigServer(projectConfig);
+  if (!server) return null;
+  try {
+    const experiment = server.getExperimentSync(mapIdentityToStatsigUser(identity), experimentId);
+    const rawAutotune = experiment.get("use_autotune", false as unknown);
+    // Statsig sometimes serializes booleans as strings ("true" / "false") in
+    // dynamic configs. Normalize defensively so a misconfigured experiment
+    // doesn't silently keep all traffic in the baseline arm forever.
+    const useAutotune = rawAutotune === true || rawAutotune === "true";
+    const rawVariantId = experiment.get("variant_id", null as unknown);
+    const variantId =
+      typeof rawVariantId === "string" && rawVariantId.trim() ? rawVariantId.trim() : null;
+    return { useAutotune, variantId };
+  } catch (err) {
+    console.warn(`[Tranzmit] Baseline experiment "${experimentId}" lookup failed:`, err);
+    return null;
+  }
+}
+
 export async function logStatsigEvents(batch: {
   publicKey: string;
   identity: ResolvedIdentity;
