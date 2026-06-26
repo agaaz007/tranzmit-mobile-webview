@@ -3,10 +3,22 @@ import type { ConfigRequest, ConfigResponse, PlacementConfig } from "@tranzmit/s
 import { getPlacementsForKey, validatePublicKey } from "../db.js";
 import { readBody } from "../middleware/body-parser.js";
 import { resolveConfigIdentity } from "../identity.js";
-import { getVariantAssignment } from "../statsig.js";
+import { getBaselineDecision, getVariantAssignment } from "../statsig.js";
 import { configTtlSeconds, ensureWebViewSpec, publicApiBaseUrl, shouldInlineDocuments } from "../webview-documents.js";
 
 type TargetingRule = {
+  /**
+   * Optional discriminator. The default rule shape is trait-matched
+   * (see `when`). A `type: "baseline"` rule is consulted BEFORE any
+   * trait-matched rules: it queries a Statsig experiment that returns a
+   * `use_autotune` boolean and a `variant_id`. When `use_autotune` is false,
+   * the placement skips trait-matched rules entirely and serves the baseline
+   * `variant_id` directly (the control holdout). When true, the placement
+   * falls through to the existing trait-matched flow. A Statsig outage on the
+   * baseline experiment ALSO falls through, so the customer-visible paywall
+   * never depends on Statsig being reachable.
+   */
+  type?: unknown;
   when?: Record<string, unknown>;
   statsig_experiment_id?: unknown;
   experiment_id?: unknown;
@@ -55,17 +67,45 @@ export async function handleConfig(
     }
 
     let assignedVariantId = defaultVariant;
-    const experimentId = resolveExperimentId(row.targeting_rules, identity.traits, row.experiment_id);
-    if (experimentId) {
-      assignedVariantId = await getVariantAssignment(
+    const projectConfig = {
+      projectName: row.statsig_project_name,
+      serverSecretEnvVar: row.statsig_server_secret_env_var,
+    };
+
+    // Optional pre-check: if the placement has a `type: "baseline"` rule, query
+    // that Statsig experiment first. If `use_autotune` is false, serve the
+    // baseline's `variant_id` directly (skips trait/intent routing). If true,
+    // or if Statsig is unreachable, fall through to the existing trait-matched
+    // flow. This implements the 10/90 baseline-holdout pattern without
+    // disturbing placements that don't use it.
+    const baselineRule = findBaselineRule(row.targeting_rules);
+    let baselineHandled = false;
+    if (baselineRule?.statsig_experiment_id) {
+      const decision = await getBaselineDecision(
         identity,
-        experimentId,
-        defaultVariant,
-        {
-          projectName: row.statsig_project_name,
-          serverSecretEnvVar: row.statsig_server_secret_env_var,
-        }
+        baselineRule.statsig_experiment_id,
+        projectConfig,
       );
+      if (decision) {
+        if (!decision.useAutotune) {
+          assignedVariantId = decision.variantId || defaultVariant;
+          baselineHandled = true;
+        }
+        // useAutotune=true => fall through to trait-matched flow below.
+      }
+      // decision === null (Statsig outage) => fall through too, never serve null.
+    }
+
+    if (!baselineHandled) {
+      const experimentId = resolveExperimentId(row.targeting_rules, identity.traits, row.experiment_id);
+      if (experimentId) {
+        assignedVariantId = await getVariantAssignment(
+          identity,
+          experimentId,
+          defaultVariant,
+          projectConfig,
+        );
+      }
     }
     const selected = selectVariant(row.variants, assignedVariantId, defaultVariant);
     const variantKey = selected.variantId || defaultVariant;
@@ -163,11 +203,23 @@ function resolveExperimentId(
   fallbackExperimentId: string | null
 ): string | null {
   for (const rule of normalizeTargetingRules(targetingRules)) {
+    // Skip baseline rules — they're handled by findBaselineRule, NOT the
+    // trait-matched flow (their `when` is intentionally empty).
+    if (rule.type === "baseline") continue;
     if (!matchesTraits(rule.when, traits)) continue;
     const experimentId = normalizeExperimentId(rule.statsig_experiment_id ?? rule.experiment_id ?? rule.experimentId);
     if (experimentId) return experimentId;
   }
   return fallbackExperimentId;
+}
+
+function findBaselineRule(targetingRules: unknown): { statsig_experiment_id: string | null } | null {
+  for (const rule of normalizeTargetingRules(targetingRules)) {
+    if (rule.type !== "baseline") continue;
+    const experimentId = normalizeExperimentId(rule.statsig_experiment_id ?? rule.experiment_id ?? rule.experimentId);
+    if (experimentId) return { statsig_experiment_id: experimentId };
+  }
+  return null;
 }
 
 function normalizeTargetingRules(value: unknown): TargetingRule[] {

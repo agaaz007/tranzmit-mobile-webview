@@ -42,6 +42,7 @@ vi.mock("../src/db.js", () => ({
 vi.mock("../src/statsig.js", () => ({
   initStatsig: vi.fn(async () => {}),
   getVariantAssignment: vi.fn(async (_user: unknown, _exp: string, def: string) => def),
+  getBaselineDecision: vi.fn(async () => null),
   logStatsigEvents: vi.fn(() => {}),
   isInitialized: vi.fn(() => false),
 }));
@@ -407,6 +408,168 @@ describe("GET /config", () => {
 	    const config: ConfigResponse = JSON.parse(res.body);
 	    expect(config.placements.upgrade_pro.variantId).toBe("var_default");
 	    expect(config.placements.upgrade_pro.spec.headline).toBe("Default");
+	  });
+
+	  // ─── baseline pre-check (intent-routed placements with a control holdout) ───
+	  const baselinePlacementRow = () => ({
+	    id: "pl_baseline",
+	    trigger: "upgrade_pro",
+	    enabled: true,
+	    default_variant_id: "control",
+	    experiment_id: "paywall_intent_marriage",
+	    targeting_rules: [
+	      { type: "baseline", statsig_experiment_id: "hiastro-prod-baseline" },
+	      { when: { intent: "marriage" }, statsig_experiment_id: "paywall_intent_marriage" },
+	      { when: { intent: "love" }, statsig_experiment_id: "paywall_intent_love" },
+	    ],
+	    spec: { layout: "compact", headline: "Control", cta: "Default", theme: "light", products: [] },
+	    variants: [
+	      {
+	        id: "pv_control",
+	        variant_id: "control",
+	        enabled: true,
+	        fallback_rank: 0,
+	        spec: { layout: "compact", headline: "Control Holdout", cta: "Default", theme: "light", products: [] },
+	      },
+	      {
+	        id: "pv_marriage_arm",
+	        variant_id: "marriage_arm",
+	        enabled: true,
+	        fallback_rank: 1,
+	        spec: { layout: "compact", headline: "Marriage Autotune", cta: "Try Marriage", theme: "light", products: [] },
+	      },
+	    ],
+	  });
+
+	  it("baseline use_autotune=false serves the baseline variant_id regardless of intent", async () => {
+	    const db = await import("../src/db.js");
+	    const statsig = await import("../src/statsig.js");
+	    vi.mocked(statsig.getVariantAssignment).mockClear();
+	    vi.mocked(statsig.getBaselineDecision).mockClear();
+	    vi.mocked(db.getPlacementsForKey).mockResolvedValueOnce([baselinePlacementRow()] as any);
+	    vi.mocked(statsig.getBaselineDecision).mockResolvedValueOnce({ useAutotune: false, variantId: "control" });
+
+	    const res = await makeRequest(
+	      "/config",
+	      "POST",
+	      JSON.stringify({
+	        publicKey: "pk_test_valid",
+	        identity: { identifiers: { stableID: "stable_holdout" } },
+	        traits: { intent: "marriage" },
+	      })
+	    );
+
+	    expect(res.status).toBe(200);
+	    const config: ConfigResponse = JSON.parse(res.body);
+	    expect(config.placements.upgrade_pro.variantId).toBe("control");
+	    expect(config.placements.upgrade_pro.spec.headline).toBe("Control Holdout");
+	    // Intent routing must NOT be consulted in this branch.
+	    expect(vi.mocked(statsig.getVariantAssignment)).not.toHaveBeenCalled();
+	  });
+
+	  it("baseline use_autotune=true falls through to intent-based MAB routing", async () => {
+	    const db = await import("../src/db.js");
+	    const statsig = await import("../src/statsig.js");
+	    vi.mocked(db.getPlacementsForKey).mockResolvedValueOnce([baselinePlacementRow()] as any);
+	    vi.mocked(statsig.getBaselineDecision).mockResolvedValueOnce({ useAutotune: true, variantId: null });
+	    vi.mocked(statsig.getVariantAssignment).mockResolvedValueOnce("marriage_arm");
+
+	    const res = await makeRequest(
+	      "/config",
+	      "POST",
+	      JSON.stringify({
+	        publicKey: "pk_test_valid",
+	        identity: { identifiers: { stableID: "stable_autotune" } },
+	        traits: { intent: "marriage" },
+	      })
+	    );
+
+	    expect(res.status).toBe(200);
+	    const config: ConfigResponse = JSON.parse(res.body);
+	    expect(config.placements.upgrade_pro.variantId).toBe("marriage_arm");
+	    expect(config.placements.upgrade_pro.spec.headline).toBe("Marriage Autotune");
+	    // The intent-matched experiment must be the one queried.
+	    expect(vi.mocked(statsig.getVariantAssignment)).toHaveBeenCalledWith(
+	      expect.objectContaining({ traits: expect.objectContaining({ intent: "marriage" }) }),
+	      "paywall_intent_marriage",
+	      "control",
+	      expect.objectContaining({})
+	    );
+	  });
+
+	  it("baseline Statsig outage (null) falls through to intent routing — never breaks the paywall", async () => {
+	    const db = await import("../src/db.js");
+	    const statsig = await import("../src/statsig.js");
+	    vi.mocked(db.getPlacementsForKey).mockResolvedValueOnce([baselinePlacementRow()] as any);
+	    vi.mocked(statsig.getBaselineDecision).mockResolvedValueOnce(null);
+	    vi.mocked(statsig.getVariantAssignment).mockResolvedValueOnce("marriage_arm");
+
+	    const res = await makeRequest(
+	      "/config",
+	      "POST",
+	      JSON.stringify({
+	        publicKey: "pk_test_valid",
+	        identity: { identifiers: { stableID: "stable_outage" } },
+	        traits: { intent: "marriage" },
+	      })
+	    );
+
+	    expect(res.status).toBe(200);
+	    const config: ConfigResponse = JSON.parse(res.body);
+	    expect(config.placements.upgrade_pro.variantId).toBe("marriage_arm");
+	    expect(vi.mocked(statsig.getVariantAssignment)).toHaveBeenCalled();
+	  });
+
+	  it("baseline use_autotune=false with null variant_id serves the placement default variant (safe)", async () => {
+	    const db = await import("../src/db.js");
+	    const statsig = await import("../src/statsig.js");
+	    vi.mocked(statsig.getVariantAssignment).mockClear();
+	    vi.mocked(statsig.getBaselineDecision).mockClear();
+	    vi.mocked(db.getPlacementsForKey).mockResolvedValueOnce([baselinePlacementRow()] as any);
+	    vi.mocked(statsig.getBaselineDecision).mockResolvedValueOnce({ useAutotune: false, variantId: null });
+
+	    const res = await makeRequest(
+	      "/config",
+	      "POST",
+	      JSON.stringify({
+	        publicKey: "pk_test_valid",
+	        identity: { identifiers: { stableID: "stable_safe_default" } },
+	        traits: { intent: "marriage" },
+	      })
+	    );
+
+	    expect(res.status).toBe(200);
+	    const config: ConfigResponse = JSON.parse(res.body);
+	    expect(config.placements.upgrade_pro.variantId).toBe("control");
+	    expect(vi.mocked(statsig.getVariantAssignment)).not.toHaveBeenCalled();
+	  });
+
+	  it("placements WITHOUT a baseline rule are unaffected (intent routing works as before)", async () => {
+	    const db = await import("../src/db.js");
+	    const statsig = await import("../src/statsig.js");
+	    vi.mocked(statsig.getVariantAssignment).mockClear();
+	    vi.mocked(statsig.getBaselineDecision).mockClear();
+	    const row = baselinePlacementRow();
+	    // Strip the baseline rule entirely.
+	    (row as any).targeting_rules = (row as any).targeting_rules.filter((r: any) => r.type !== "baseline");
+	    vi.mocked(db.getPlacementsForKey).mockResolvedValueOnce([row] as any);
+	    vi.mocked(statsig.getVariantAssignment).mockResolvedValueOnce("marriage_arm");
+
+	    const res = await makeRequest(
+	      "/config",
+	      "POST",
+	      JSON.stringify({
+	        publicKey: "pk_test_valid",
+	        identity: { identifiers: { stableID: "stable_no_baseline" } },
+	        traits: { intent: "marriage" },
+	      })
+	    );
+
+	    expect(res.status).toBe(200);
+	    const config: ConfigResponse = JSON.parse(res.body);
+	    expect(config.placements.upgrade_pro.variantId).toBe("marriage_arm");
+	    expect(vi.mocked(statsig.getBaselineDecision)).not.toHaveBeenCalled();
+	    expect(vi.mocked(statsig.getVariantAssignment)).toHaveBeenCalled();
 	  });
 
 	  it("serves hosted WebView document payloads by immutable cache key", async () => {
