@@ -187,6 +187,52 @@ describe("GET /config", () => {
 	    expect(payload.integrity).toBe(expected);
 	  });
 
+	  it("suppresses the legacy fallback CSS for React Native hosted documents", async () => {
+	    const { ensureWebViewSpec } = await import("../src/webview-documents.js");
+	    const hostedSpec = {
+	      renderer: "webview",
+	      templateId: "paywall",
+	      document: { html: "<main class=\"device\"><style>.cta{color:red}</style><button class=\"cta\">Go</button></main>" },
+	      products: [],
+	    };
+	    const baseContext = {
+	      publicKey: "pk_test_valid",
+	      placementId: "pl_1",
+	      variantKey: "var_1",
+	      apiBaseUrl: "https://api.example.test",
+	      includeInline: true,
+	    };
+
+	    // React Native: hosted HTML is self-styled -> no legacy sheet injected.
+	    const rn = ensureWebViewSpec(hostedSpec, { ...baseContext, sdkStack: "react_native" });
+	    expect(rn.document.css).toBe("");
+	    expect(rn.document.css).not.toContain("position:fixed");
+
+	    // Flutter (and any non-RN stack): legacy fallback stylesheet preserved.
+	    const flutter = ensureWebViewSpec(hostedSpec, { ...baseContext, sdkStack: "flutter" });
+	    expect(flutter.document.css).toContain("position:fixed");
+
+	    // Different css -> different cacheKey, so a flutter doc URL never resolves
+	    // a react_native payload and vice versa.
+	    expect(rn.cacheKey).not.toBe(flutter.cacheKey);
+	  });
+
+	  it("keeps the legacy CSS for legacy block-tree specs even on React Native", async () => {
+	    const { ensureWebViewSpec } = await import("../src/webview-documents.js");
+	    // No document.html -> server builds the legacy block tree, which needs the
+	    // generic stylesheet regardless of SDK stack.
+	    const legacySpec = { renderer: "webview", templateId: "paywall", headline: "Hi", cta: "Go", products: [] };
+	    const rn = ensureWebViewSpec(legacySpec, {
+	      publicKey: "pk_test_valid",
+	      placementId: "pl_1",
+	      variantKey: "var_1",
+	      apiBaseUrl: "https://api.example.test",
+	      includeInline: true,
+	      sdkStack: "react_native",
+	    });
+	    expect(rn.document.css).toContain("position:fixed");
+	  });
+
 	  it("returns the Statsig-assigned variant spec", async () => {
 	    const db = await import("../src/db.js");
 	    const statsig = await import("../src/statsig.js");

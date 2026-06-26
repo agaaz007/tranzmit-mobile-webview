@@ -53,6 +53,9 @@ export async function handlePaywallDocument(
     placementId: row.id,
     variantKey,
     apiBaseUrl: publicApiBaseUrl(req),
+    // Must mirror the config endpoint so the recomputed cacheKey matches the
+    // one embedded in the document URL (RN clients suppress the legacy CSS).
+    sdkStack: row.sdk_stack,
   });
   if (payload.cacheKey !== requestedCacheKey) {
     res.writeHead(404, { "Content-Type": "application/json" });

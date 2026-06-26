@@ -115,6 +115,7 @@ export async function handleConfig(
       variantKey,
       apiBaseUrl,
       includeInline,
+      sdkStack: row.sdk_stack,
     });
     placements[row.trigger] = {
       trigger: row.trigger,

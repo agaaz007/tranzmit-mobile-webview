@@ -9,6 +9,14 @@ export interface WebViewDocumentContext {
   variantKey: string;
   apiBaseUrl: string;
   includeInline?: boolean;
+  /**
+   * The owning client's SDK stack (`react_native` | `flutter` | `swift`).
+   * Controls whether the legacy fallback stylesheet is injected onto hosted
+   * HTML documents — see the `css` derivation in `ensureWebViewSpec`. Must be
+   * passed identically at every call site (config + paywall-documents) so the
+   * computed `cacheKey` matches.
+   */
+  sdkStack?: string;
 }
 
 export interface WebViewDocumentPayload {
@@ -59,12 +67,15 @@ export function ensureWebViewSpec(spec: unknown, context?: WebViewDocumentContex
   const providedHtml = stringOrUndefined(existingDocument.html);
   const html = providedHtml || buildLegacyWebViewHtml(next);
   const providedCss = stringOrUndefined(existingDocument.css) || stringOrUndefined(next.customCss);
-  // The legacy generic stylesheet is only meant for SDK-generated legacy block-tree HTML.
-  // Hosted HTML documents already embed their own complete styles, so injecting the legacy
-  // CSS on top of them pollutes the design (e.g. a generic `.cta{position:fixed}` overriding
-  // a hosted paywall's CTA, which then overlaps the offer card on real devices). Only fall
-  // back to the legacy CSS when we also built the legacy HTML.
-  const css = providedCss ?? (providedHtml ? "" : buildLegacyWebViewCss(next));
+  // The legacy generic stylesheet is only meant for the SDK-generated legacy
+  // block-tree HTML that Flutter/Swift clients still rely on. React Native
+  // clients ship complete, self-contained hosted HTML, so injecting the legacy
+  // CSS on top pollutes the design (e.g. a generic `.cta{position:fixed}`
+  // overriding a hosted paywall's own CTA, which then overlaps the offer card on
+  // real devices). Suppress the fallback ONLY for React Native hosted documents;
+  // every other client/spec keeps the exact prior behavior.
+  const isReactNative = context?.sdkStack === "react_native";
+  const css = providedCss ?? (providedHtml && isReactNative ? "" : buildLegacyWebViewCss(next));
   const js = stringOrUndefined(existingDocument.js);
   const baseUrl = stringOrUndefined(existingDocument.baseUrl) || context?.apiBaseUrl;
   const contentHash = hashDocument({ html, css, js, baseUrl });

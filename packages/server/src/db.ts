@@ -24,6 +24,7 @@ export async function getPlacementsForKey(publicKey: string) {
     targeting_rules: unknown;
     statsig_project_name: string | null;
     statsig_server_secret_env_var: string;
+    sdk_stack: string;
     spec: unknown;
     variants: Array<{
       id: string;
@@ -45,6 +46,7 @@ export async function getPlacementsForKey(publicKey: string) {
        p.targeting_rules,
        c.statsig_project_name,
        COALESCE(NULLIF(c.statsig_server_secret_env_var, ''), 'STATSIG_SERVER_SECRET') AS statsig_server_secret_env_var,
+       COALESCE(NULLIF(c.sdk_stack, ''), 'react_native') AS sdk_stack,
        CASE
          WHEN p.default_spec_id IS NOT NULL THEN default_spec.spec
          ELSE p.spec
@@ -82,7 +84,7 @@ export async function getPlacementsForKey(publicKey: string) {
       AND variant_spec.status <> 'archived'
      WHERE p.public_key = $1
        AND COALESCE(p.status, CASE WHEN p.enabled THEN 'active' ELSE 'paused' END) <> 'archived'
-     GROUP BY p.id, default_spec.spec, c.statsig_project_name, c.statsig_server_secret_env_var
+     GROUP BY p.id, default_spec.spec, c.statsig_project_name, c.statsig_server_secret_env_var, c.sdk_stack
      ORDER BY p.created_at DESC`,
     [publicKey]
   );
