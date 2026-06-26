@@ -56,8 +56,15 @@ export function ensureWebViewSpec(spec: unknown, context?: WebViewDocumentContex
   next.bridge = next.bridge || { version: 1, allowedActions: ["cta", "dismiss", "open_url", "custom_action"] };
 
   const existingDocument = cloneRecord(next.document);
-  const html = stringOrUndefined(existingDocument.html) || buildLegacyWebViewHtml(next);
-  const css = stringOrUndefined(existingDocument.css) || stringOrUndefined(next.customCss) || buildLegacyWebViewCss(next);
+  const providedHtml = stringOrUndefined(existingDocument.html);
+  const html = providedHtml || buildLegacyWebViewHtml(next);
+  const providedCss = stringOrUndefined(existingDocument.css) || stringOrUndefined(next.customCss);
+  // The legacy generic stylesheet is only meant for SDK-generated legacy block-tree HTML.
+  // Hosted HTML documents already embed their own complete styles, so injecting the legacy
+  // CSS on top of them pollutes the design (e.g. a generic `.cta{position:fixed}` overriding
+  // a hosted paywall's CTA, which then overlaps the offer card on real devices). Only fall
+  // back to the legacy CSS when we also built the legacy HTML.
+  const css = providedCss ?? (providedHtml ? "" : buildLegacyWebViewCss(next));
   const js = stringOrUndefined(existingDocument.js);
   const baseUrl = stringOrUndefined(existingDocument.baseUrl) || context?.apiBaseUrl;
   const contentHash = hashDocument({ html, css, js, baseUrl });
