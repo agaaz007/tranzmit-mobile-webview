@@ -1395,6 +1395,8 @@ const DASHBOARD_HTML = `<!doctype html>
         try { time = new Date(ev.created_at).toLocaleTimeString(); } catch (_) {}
         var props = ev.properties || {};
         var summary = [
+          props.intent ? 'intent: ' + props.intent : null,
+          props.resolved ? props.resolved : null,
           props.placement_id ? 'placement: ' + props.placement_id : null,
           props.variant_key ? 'variant: ' + props.variant_key : null,
           props.product_id ? 'product: ' + props.product_id : null,
