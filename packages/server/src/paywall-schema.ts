@@ -291,6 +291,17 @@ export const paywallSpecSchema = {
       properties: {
         enabled: { type: "boolean" },
         delay_ms: { type: "number", minimum: 0 },
+        // Optional placement override for the SDK-rendered fullscreen close (×)
+        // button: nudge (dx/dy) + shrink (scale) it into a clean top-left corner.
+        anchor: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            dx: { type: "number" },
+            dy: { type: "number" },
+            scale: { type: "number", minimum: 0.5, maximum: 1 },
+          },
+        },
       },
     },
   },
