@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ConfigRequest, ConfigResponse, PlacementConfig } from "@tranzmit/shared";
-import { getPlacementsForKey, validatePublicKey } from "../db.js";
+import { getPlacementsForKey, insertEvents, validatePublicKey } from "../db.js";
 import { readBody } from "../middleware/body-parser.js";
 import { resolveConfigIdentity } from "../identity.js";
 import { getBaselineDecision, getVariantAssignment } from "../statsig.js";
@@ -146,6 +146,34 @@ export async function handleConfig(
     traits: request.traits ?? null,
     resolved,
   }));
+
+  // Also record the resolution as a `paywall_resolved` event so it shows in the
+  // Events dashboard with the intent the SDK passed and the variant each
+  // placement resolved to. Fire-and-forget so it never adds latency or breaks the
+  // config response.
+  const intentValue =
+    request.traits && typeof request.traits === "object"
+      ? (request.traits as Record<string, unknown>).intent
+      : undefined;
+  void insertEvents(
+    publicKey,
+    identity.userId || identity.storageUserId,
+    identity.storageUserId,
+    [
+      {
+        event: "paywall_resolved",
+        timestamp: Date.now(),
+        properties: {
+          intent: intentValue != null ? String(intentValue) : "(none)",
+          resolved: resolved
+            .map((r) => `${r.trigger}=${r.variant}${r.viaBaseline ? " (baseline)" : ""}`)
+            .join(", "),
+          traits: request.traits ? JSON.stringify(request.traits) : "",
+        },
+      },
+    ],
+    identity,
+  ).catch((err) => console.warn("[tz.resolve] paywall_resolved insert failed:", err));
 
   const fetchedAt = new Date().toISOString();
   const ttl = configTtlSeconds();
