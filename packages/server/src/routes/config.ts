@@ -58,6 +58,7 @@ export async function handleConfig(
   const includeInline = shouldInlineDocuments();
 
   const placements: ConfigResponse["placements"] = {};
+  const resolved: Array<{ trigger: string; experimentId: string | null; viaBaseline: boolean; assignedVariantId: string; variant: string }> = [];
   for (const row of rows) {
     const defaultVariant = row.default_variant_id || "var_default";
     const status = row.status || (row.enabled ? "active" : "paused");
@@ -67,6 +68,8 @@ export async function handleConfig(
     }
 
     let assignedVariantId = defaultVariant;
+    let viaBaseline = false;
+    let chosenExperimentId: string | null = null;
     const projectConfig = {
       projectName: row.statsig_project_name,
       serverSecretEnvVar: row.statsig_server_secret_env_var,
@@ -90,6 +93,7 @@ export async function handleConfig(
         if (!decision.useAutotune) {
           assignedVariantId = decision.variantId || defaultVariant;
           baselineHandled = true;
+          viaBaseline = true;
         }
         // useAutotune=true => fall through to trait-matched flow below.
       }
@@ -98,6 +102,7 @@ export async function handleConfig(
 
     if (!baselineHandled) {
       const experimentId = resolveExperimentId(row.targeting_rules, identity.traits, row.experiment_id);
+      chosenExperimentId = experimentId ?? null;
       if (experimentId) {
         assignedVariantId = await getVariantAssignment(
           identity,
@@ -109,6 +114,7 @@ export async function handleConfig(
     }
     const selected = selectVariant(row.variants, assignedVariantId, defaultVariant);
     const variantKey = selected.variantId || defaultVariant;
+    resolved.push({ trigger: row.trigger, experimentId: chosenExperimentId, viaBaseline, assignedVariantId, variant: variantKey });
     const selectedSpec = ensureWebViewSpec(selected.spec ?? row.spec, {
       publicKey,
       placementId: row.id,
@@ -128,6 +134,18 @@ export async function handleConfig(
       spec: selectedSpec as PlacementConfig["spec"],
     };
   }
+
+  // Resolution log: the targeting traits the SDK passed (e.g. `intent`) and how
+  // each placement resolved — via the baseline holdout or an intent-matched
+  // experiment — plus the final variant. Lets us see "user came with intent X ->
+  // got paywall Y". Greppable in the Railway logs via the [tz.resolve] tag.
+  console.log("[tz.resolve]", JSON.stringify({
+    publicKey,
+    userId: identity.userId ?? null,
+    identifiers: identity.identifiers ?? null,
+    traits: request.traits ?? null,
+    resolved,
+  }));
 
   const fetchedAt = new Date().toISOString();
   const ttl = configTtlSeconds();
