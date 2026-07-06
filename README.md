@@ -2,6 +2,38 @@
 
 Cross-platform monetization SDK for Superwall-style, server-driven mobile WebView paywalls. The SDK owns presentation, bridge events, local/offline caching, and analytics. Your Tranzmit server owns placement config, variants, hosted HTML/CSS documents, and dashboard edits.
 
+## 🚨🚨 PRODUCTION PUSH WARNING — READ BEFORE TOUCHING LIVE PLACEMENTS 🚨🚨
+
+> **A single careless config push can silently kill a live A/B test.** On
+> **2026-06-30**, a run of `scripts/push-influish-production.mjs` reverted the
+> live Influish variants to month-old paywalls **and wiped the placement's
+> Statsig experiment link**, which sent **100% of production traffic to the
+> `control` variant for six days** — with **zero errors logged anywhere**.
+>
+> Why it's this dangerous:
+> 1. **Variant selection is 100% Statsig-driven.** The `weight` columns on
+>    `placement_variants` are dead — if `placements.statsig_experiment_id` is
+>    NULL, every user gets the default variant. No experiment link = no A/B
+>    test, silently.
+> 2. **Assignment failures are swallowed.** `getVariantAssignment()` catches
+>    all errors and returns the default. A wiped link, wrong experiment name,
+>    or wrong Statsig secret all look identical: "everyone gets control."
+> 3. **`push-influish-production.mjs` re-points EVERY variant** to whatever
+>    seed.mjs currently exports, overwriting any hotfix specs pushed since.
+>
+> **Non-negotiable rules:**
+> - **NEVER** run `push-influish-production.mjs` or POST `/admin/config/import`
+>   without recording the placement's `statsig_experiment_id` and variant
+>   `spec_id`s first (`GET /admin/placements/<id>`).
+> - **ALWAYS** verify after any push: fetch `/v1/config` for ~20 distinct
+>   `userId`s and confirm more than one variant comes back. 100% one variant =
+>   the experiment link is gone.
+> - The import endpoint now **preserves** `statsig_experiment_id` /
+>   `experiment_id` / `default_spec_id` when the payload omits them
+>   (`packages/server/src/routes/admin.ts`, guarded by
+>   `packages/server/tests/admin-import.test.ts`). **Do not "simplify" that
+>   upsert back to unconditional `EXCLUDED.*` writes.**
+
 ## Customer Integration Contract
 
 **Tranzmit does not process purchases.** Tranzmit shows the paywall and tells your app which product the customer tapped. Your app must start StoreKit, Google Play Billing, RevenueCat, Stripe, or your own checkout, then call `reportConversion()`.
