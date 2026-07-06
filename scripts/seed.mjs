@@ -598,6 +598,13 @@ async function ensureWorkspace(client) {
   return created.rows[0];
 }
 
+// ⚠️  This payload is consumed by POST /admin/config/import against PRODUCTION.
+// The placement deliberately omits statsig_experiment_id unless
+// SEED_STATSIG_EXPERIMENT_ID is set — the import endpoint PRESERVES the live
+// experiment link when the field is absent. It used to overwrite it with NULL,
+// which killed the live Influish A/B test on 2026-06-30 (100% control for six
+// days). If you add fields here, make sure the import upsert in
+// packages/server/src/routes/admin.ts preserves them when omitted.
 function buildImportPayload(publicKey) {
   const placementId = `pl_${publicKey.replace(/[^a-zA-Z0-9]+/g, "").slice(-12)}_upgrade_pro`;
   const profile = resolveVariantProfile();
@@ -610,6 +617,7 @@ function buildImportPayload(publicKey) {
     created_by: "seed",
   }));
   const defaultEntry = profile[0];
+  const statsigExperimentId = process.env.SEED_STATSIG_EXPERIMENT_ID || undefined;
 
   return {
     publicKey,
@@ -621,6 +629,7 @@ function buildImportPayload(publicKey) {
         default_spec_id: specIdForKey(defaultEntry.specKey),
         status: "active",
         targeting_rules: [],
+        ...(statsigExperimentId ? { statsig_experiment_id: statsigExperimentId } : {}),
       },
     ],
     variants: profile.map((entry) => ({

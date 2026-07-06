@@ -1224,6 +1224,17 @@ async function importWorkspaceConfig(workspaceId: string, body: any): Promise<{ 
     if (item.id) specIdMap.set(item.id, result.rows[0].id);
   }
 
+  // ============================================================================
+  // ⚠️  DO NOT "SIMPLIFY" THIS UPSERT BACK TO UNCONDITIONAL `EXCLUDED.*` WRITES.
+  //
+  // On 2026-06-30 this upsert (then `experiment_id = EXCLUDED.experiment_id`)
+  // WIPED the live Statsig experiment link and silently reverted the Influish
+  // production A/B test to 100% control for six days, because
+  // scripts/push-influish-production.mjs imports placements WITHOUT a
+  // statsig_experiment_id field. An import payload that omits a field must
+  // PRESERVE the existing production value, never overwrite it with NULL.
+  // This mirrors the guard seed.mjs uses in its direct-DB upsertPlacement().
+  // ============================================================================
   for (const item of Array.isArray(body.placements) ? body.placements : []) {
     const trigger = normalizeOptionalText(item.trigger);
     if (!trigger) continue;
@@ -1235,11 +1246,11 @@ async function importWorkspaceConfig(workspaceId: string, body: any): Promise<{ 
        ON CONFLICT (public_key, trigger) DO UPDATE SET
          enabled = EXCLUDED.enabled,
          status = EXCLUDED.status,
-         experiment_id = EXCLUDED.experiment_id,
-         statsig_experiment_id = EXCLUDED.statsig_experiment_id,
-         default_spec_id = EXCLUDED.default_spec_id,
+         experiment_id = COALESCE(EXCLUDED.experiment_id, placements.experiment_id),
+         statsig_experiment_id = COALESCE(EXCLUDED.statsig_experiment_id, placements.statsig_experiment_id),
+         default_spec_id = COALESCE(EXCLUDED.default_spec_id, placements.default_spec_id),
          targeting_rules = EXCLUDED.targeting_rules,
-         spec = EXCLUDED.spec,
+         spec = CASE WHEN EXCLUDED.default_spec_id IS NULL THEN placements.spec ELSE EXCLUDED.spec END,
          updated_at = now()
        RETURNING id`,
       [
