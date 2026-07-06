@@ -97,7 +97,13 @@ export async function handleAdmin(
         normalizeOptionalText(body.created_by ?? body.createdBy) || "api",
       ]
     );
-    sendJson(res, 201, result.rows[0]);
+    sendJson(
+      res,
+      201,
+      validation.warnings.length
+        ? { ...result.rows[0], warnings: validation.warnings }
+        : result.rows[0]
+    );
     return;
   }
 
@@ -153,12 +159,14 @@ export async function handleAdmin(
       return;
     }
 
+    let specWarnings: ReturnType<typeof validatePaywallSpec>["warnings"] = [];
     if (body.spec !== undefined) {
       const validation = validatePaywallSpec(body.spec);
       if (!validation.valid) {
         sendJson(res, 400, { error: "Invalid PaywallSpec", errors: validation.errors });
         return;
       }
+      specWarnings = validation.warnings;
     }
 
     const nextSpecJson = body.spec === undefined ? null : JSON.stringify(body.spec);
@@ -193,7 +201,11 @@ export async function handleAdmin(
       );
     }
 
-    sendJson(res, 200, result.rows[0]);
+    sendJson(
+      res,
+      200,
+      specWarnings.length ? { ...result.rows[0], warnings: specWarnings } : result.rows[0]
+    );
     return;
   }
 

@@ -313,14 +313,60 @@ const validate = ajv.compile(paywallSpecSchema);
 export interface ValidationResult {
   valid: boolean;
   errors: Array<{ path: string; message: string; keyword: string }>;
+  warnings: Array<{ path: string; message: string; keyword: string }>;
+}
+
+// Size guardrails for spec.document (html+css+js bytes). Oversized documents
+// caused a production incident on 2026-07-06: 271-290KB documents (base64
+// PNGs inlined into the html) exceeded the Flutter SDK's 8s fetch timeout on
+// cellular, so ~55% of test-variant users silently got the app fallback.
+// Warn above 100KB; reject above 512KB so it can never silently regress that
+// far again. Fix for large images: re-encode to WebP or host them as real
+// URLs instead of data URIs.
+const DOCUMENT_WARN_BYTES = 100_000;
+const DOCUMENT_REJECT_BYTES = 512_000;
+
+function documentBytes(spec: unknown): number {
+  const document = (spec as { document?: unknown } | null)?.document;
+  if (!document || typeof document !== "object") return 0;
+  let total = 0;
+  for (const key of ["html", "css", "js"] as const) {
+    const value = (document as Record<string, unknown>)[key];
+    if (typeof value === "string") total += Buffer.byteLength(value, "utf8");
+  }
+  return total;
 }
 
 export function validatePaywallSpec(spec: unknown): ValidationResult {
   const valid = validate(spec);
-  return {
+  const result: ValidationResult = {
     valid,
     errors: valid ? [] : formatErrors(validate.errors || []),
+    warnings: [],
   };
+  if (!result.valid) return result;
+
+  const bytes = documentBytes(spec);
+  if (bytes > DOCUMENT_REJECT_BYTES) {
+    result.valid = false;
+    result.errors.push({
+      path: "/document",
+      message:
+        `document html+css+js is ${bytes.toLocaleString()} bytes (limit ${DOCUMENT_REJECT_BYTES.toLocaleString()}). ` +
+        "Documents this large time out on cellular and users silently get the fallback paywall. " +
+        "Re-encode inlined images to WebP or host them as URLs instead of data URIs.",
+      keyword: "maxDocumentBytes",
+    });
+  } else if (bytes > DOCUMENT_WARN_BYTES) {
+    result.warnings.push({
+      path: "/document",
+      message:
+        `document html+css+js is ${bytes.toLocaleString()} bytes (>${DOCUMENT_WARN_BYTES.toLocaleString()}). ` +
+        "Large documents load slowly on cellular; keep paywalls lean (WebP images, hosted assets).",
+      keyword: "documentSizeWarning",
+    });
+  }
+  return result;
 }
 
 function formatErrors(errors: ErrorObject[]): ValidationResult["errors"] {
