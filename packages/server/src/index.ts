@@ -11,6 +11,7 @@ import { handlePaywallDocument } from "./routes/paywall-documents.js";
 import { handleAsset } from "./routes/assets.js";
 import { pool } from "./db.js";
 import { runMigrations } from "./migrations.js";
+import { startFallbackDetector } from "./fallback-detector.js";
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
@@ -195,6 +196,8 @@ async function handler(req: IncomingMessage, res: ServerResponse): Promise<void>
 async function start(): Promise<void> {
   await runMigrations();
   await initStatsig();
+  // No-op unless FALLBACK_DETECTOR_ENABLED=1 (deploy stays inert until enabled).
+  startFallbackDetector();
 
   const server = createServer(handler);
 

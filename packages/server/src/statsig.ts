@@ -18,7 +18,7 @@ interface StatsigClientState {
 
 const clients = new Map<string, StatsigClientState>();
 const missingSecretWarnings = new Set<string>();
-const EVENT_PREFIX = "tranzmit_";
+export const EVENT_PREFIX = "tranzmit_";
 
 export function isConfigured(): boolean {
   return Boolean(process.env[DEFAULT_STATSIG_SERVER_SECRET_ENV_VAR]);
@@ -174,7 +174,7 @@ export function getStatsigProjectStatus(projectConfig?: StatsigProjectConfig): {
   };
 }
 
-async function getProjectConfigForPublicKey(publicKey: string): Promise<StatsigProjectConfig> {
+export async function getProjectConfigForPublicKey(publicKey: string): Promise<StatsigProjectConfig> {
   const result = await query<{
     statsig_project_name: string | null;
     statsig_server_secret_env_var: string | null;
@@ -191,7 +191,7 @@ async function getProjectConfigForPublicKey(publicKey: string): Promise<StatsigP
   };
 }
 
-async function getStatsigServer(projectConfig?: StatsigProjectConfig): Promise<StatsigServer | null> {
+export async function getStatsigServer(projectConfig?: StatsigProjectConfig): Promise<StatsigServer | null> {
   const serverSecretEnvVar = normalizeStatsigSecretEnvVar(projectConfig?.serverSecretEnvVar);
   if (!isValidStatsigSecretEnvVar(serverSecretEnvVar)) {
     console.warn(`[Tranzmit] Invalid Statsig server secret env var "${serverSecretEnvVar}", using default variants`);
