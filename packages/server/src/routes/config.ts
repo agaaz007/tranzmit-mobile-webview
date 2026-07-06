@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ConfigRequest, ConfigResponse, PlacementConfig } from "@tranzmit/shared";
 import { getPlacementsForKey, insertEvents, validatePublicKey } from "../db.js";
+import { sendJsonCompressed } from "../http-compress.js";
 import { readBody } from "../middleware/body-parser.js";
 import { resolveConfigIdentity } from "../identity.js";
 import { getBaselineDecision, getVariantAssignment } from "../statsig.js";
@@ -190,12 +191,12 @@ export async function handleConfig(
     },
   };
 
-  res.writeHead(200, {
-    "Content-Type": "application/json",
+  // No compressionCacheKey: the payload embeds fetched_at, so it changes on
+  // every request and must be compressed per-request.
+  sendJsonCompressed(req, res, 200, JSON.stringify(config), {
     "Cache-Control": "no-store",
     "Access-Control-Allow-Origin": "*",
   });
-  res.end(JSON.stringify(config));
 }
 
 async function parseConfigRequest(req: IncomingMessage, url: URL): Promise<ConfigRequest | null> {
