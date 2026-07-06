@@ -5,6 +5,7 @@ import { handleAdmin } from "./routes/admin.js";
 import { serveConfigDashboard } from "./routes/config-dashboard.js";
 import { initStatsig, isConfigured as isStatsigConfigured, isInitialized as isStatsigInitialized, shutdownStatsig } from "./statsig.js";
 import { checkRateLimit, LIMITS } from "./middleware/rate-limit.js";
+import { requireDashboardAuth } from "./middleware/dashboard-auth.js";
 import { handleUsage } from "./routes/usage.js";
 import { handlePaywallDocument } from "./routes/paywall-documents.js";
 import { handleAsset } from "./routes/assets.js";
@@ -89,14 +90,16 @@ async function handler(req: IncomingMessage, res: ServerResponse): Promise<void>
   const ip = getClientIp(req);
 
   try {
-    // --- Human-friendly service root ---
+    // --- Human-friendly service root (password-gated) ---
     if (path === "/" && req.method === "GET") {
+      if (!requireDashboardAuth(req, res)) return;
       serveHome(res);
       return;
     }
 
-    // --- Mobile config dashboard (no rate limit, served directly) ---
+    // --- Mobile config dashboard (password-gated, no rate limit) ---
     if (path === "/config-dashboard") {
+      if (!requireDashboardAuth(req, res)) return;
       serveConfigDashboard(res);
       return;
     }
