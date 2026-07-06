@@ -97,7 +97,13 @@ export async function handleAdmin(
         normalizeOptionalText(body.created_by ?? body.createdBy) || "api",
       ]
     );
-    sendJson(res, 201, result.rows[0]);
+    sendJson(
+      res,
+      201,
+      validation.warnings.length
+        ? { ...result.rows[0], warnings: validation.warnings }
+        : result.rows[0]
+    );
     return;
   }
 
@@ -153,12 +159,14 @@ export async function handleAdmin(
       return;
     }
 
+    let specWarnings: ReturnType<typeof validatePaywallSpec>["warnings"] = [];
     if (body.spec !== undefined) {
       const validation = validatePaywallSpec(body.spec);
       if (!validation.valid) {
         sendJson(res, 400, { error: "Invalid PaywallSpec", errors: validation.errors });
         return;
       }
+      specWarnings = validation.warnings;
     }
 
     const nextSpecJson = body.spec === undefined ? null : JSON.stringify(body.spec);
@@ -193,7 +201,11 @@ export async function handleAdmin(
       );
     }
 
-    sendJson(res, 200, result.rows[0]);
+    sendJson(
+      res,
+      200,
+      specWarnings.length ? { ...result.rows[0], warnings: specWarnings } : result.rows[0]
+    );
     return;
   }
 
@@ -874,6 +886,96 @@ export async function handleAdmin(
   }
 
   // --- EVENTS STATS ---
+
+  // Per-variant paywall funnel health: resolved users (server assigned a
+  // variant at /v1/config), shown users (SDK reported an impression), and
+  // inferred fallbacks (detector flagged resolve-without-page_view). Surfaces
+  // the cellular init-death gap (e.g. control 30.5% vs intro_offer 12.6%).
+  if (path === "/admin/metrics/show-rate" && req.method === "GET") {
+    const url = new URL(req.url || "/", `http://${req.headers.host}`);
+    const workspace = await resolveWorkspace(
+      auth,
+      normalizeOptionalText(url.searchParams.get("public_key") || url.searchParams.get("publicKey"))
+    );
+    if (!workspace) {
+      sendJson(res, 400, { error: "Missing or invalid public_key" });
+      return;
+    }
+    // parseLimit coerces a missing param via Number(null)=0 -> clamp 1, so
+    // apply the 3h default before clamping.
+    const hoursRaw = url.searchParams.get("hours");
+    const hours = hoursRaw === null ? 3 : parseLimit(hoursRaw, 3, 168);
+
+    const result = await query<{
+      variant: string;
+      resolved_users: string | number;
+      shown_users: string | number;
+      inferred_fallback_users: string | number;
+    }>(
+      `WITH resolved AS (
+         -- properties->>'resolved' is "trigger=variant" pairs, comma-joined
+         -- when a config resolves multiple placements. Explode the pairs so a
+         -- multi-placement resolve counts once per placement variant instead
+         -- of producing a mangled "variantA, trigger_b" bucket.
+         SELECT
+           split_part(split_part(pair, '=', 2), ' (', 1) AS variant,
+           COUNT(DISTINCT user_id) AS resolved_users
+         FROM events,
+              LATERAL regexp_split_to_table(properties->>'resolved', ',\\s*') AS pair
+         WHERE public_key = $1
+           AND event_name = 'paywall_resolved'
+           AND created_at >= now() - make_interval(hours => $2::int)
+           AND position('=' in pair) > 0
+         GROUP BY 1
+       ),
+       shown AS (
+         SELECT
+           properties->>'variantId' AS variant,
+           COUNT(DISTINCT user_id) AS shown_users
+         FROM events
+         WHERE public_key = $1
+           AND event_name = 'impression'
+           AND created_at >= now() - make_interval(hours => $2::int)
+         GROUP BY 1
+       ),
+       fallbacks AS (
+         SELECT
+           properties->>'variant' AS variant,
+           COUNT(DISTINCT user_id) AS inferred_fallback_users
+         FROM events
+         WHERE public_key = $1
+           AND event_name = 'paywall_fallback_inferred'
+           AND created_at >= now() - make_interval(hours => $2::int)
+         GROUP BY 1
+       )
+       SELECT
+         COALESCE(r.variant, s.variant, f.variant) AS variant,
+         COALESCE(r.resolved_users, 0) AS resolved_users,
+         COALESCE(s.shown_users, 0) AS shown_users,
+         COALESCE(f.inferred_fallback_users, 0) AS inferred_fallback_users
+       FROM resolved r
+       FULL OUTER JOIN shown s ON s.variant = r.variant
+       FULL OUTER JOIN fallbacks f ON f.variant = COALESCE(r.variant, s.variant)
+       WHERE COALESCE(r.variant, s.variant, f.variant) IS NOT NULL
+         AND COALESCE(r.variant, s.variant, f.variant) <> ''
+       ORDER BY 1 ASC`,
+      [workspace.public_key, hours]
+    );
+
+    const rows = result.rows.map((row) => {
+      const resolvedUsers = Number(row.resolved_users) || 0;
+      const shownUsers = Number(row.shown_users) || 0;
+      return {
+        variant: row.variant,
+        resolved_users: resolvedUsers,
+        shown_users: shownUsers,
+        show_rate_pct: resolvedUsers > 0 ? Math.round((shownUsers / resolvedUsers) * 1000) / 10 : null,
+        inferred_fallback_users: Number(row.inferred_fallback_users) || 0,
+      };
+    });
+    sendJson(res, 200, { public_key: workspace.public_key, hours, rows });
+    return;
+  }
 
   if (path === "/admin/events/stats" && req.method === "GET") {
     const result = await query<{ event_name: string; count: string }>(
