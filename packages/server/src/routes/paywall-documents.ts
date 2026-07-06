@@ -110,7 +110,10 @@ export async function handlePaywallDocument(
       "Access-Control-Allow-Origin": "*",
     },
     // Documents are immutable per content hash, so gzipped bytes are safely
-    // cacheable across requests.
-    { compressionCacheKey: contentHash }
+    // cacheable across requests. The key must include cacheKey too: the hash
+    // covers only html/css/js/baseUrl, but the serialized body also carries
+    // cacheKey (templateId-prefixed) — two templates with identical content
+    // must not share cached bytes or one would serve the other's cacheKey.
+    { compressionCacheKey: `${payload.cacheKey}:${contentHash}` }
   );
 }

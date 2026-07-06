@@ -125,6 +125,11 @@ async function forwardToStatsig(input: {
   }
 }
 
+// The dedup is check-then-insert with no DB unique constraint, so overlapping
+// sweeps could double-insert. setInterval doesn't await the previous run and
+// Statsig forwarding can stretch a sweep past the interval — skip re-entry.
+let sweepInFlight = false;
+
 export async function runFallbackDetectorSweep(): Promise<{
   scanned: number;
   flagged: number;
@@ -133,6 +138,11 @@ export async function runFallbackDetectorSweep(): Promise<{
   let scanned = 0;
   let flagged = 0;
   let inserted = 0;
+  if (sweepInFlight) {
+    console.warn("[Tranzmit] Fallback detector sweep skipped: previous sweep still running");
+    return { scanned, flagged, inserted };
+  }
+  sweepInFlight = true;
   try {
     const scannedResult = await query<{ scanned: number }>(SCANNED_COUNT_SQL);
     scanned = Number(scannedResult.rows[0]?.scanned ?? 0);
@@ -171,6 +181,8 @@ export async function runFallbackDetectorSweep(): Promise<{
     }
   } catch (err) {
     console.warn("[Tranzmit] Fallback detector sweep failed:", err);
+  } finally {
+    sweepInFlight = false;
   }
 
   console.log(

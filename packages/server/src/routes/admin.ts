@@ -901,13 +901,19 @@ export async function handleAdmin(
       inferred_fallback_users: string | number;
     }>(
       `WITH resolved AS (
+         -- properties->>'resolved' is "trigger=variant" pairs, comma-joined
+         -- when a config resolves multiple placements. Explode the pairs so a
+         -- multi-placement resolve counts once per placement variant instead
+         -- of producing a mangled "variantA, trigger_b" bucket.
          SELECT
-           split_part(split_part(properties->>'resolved', '=', 2), ' (', 1) AS variant,
+           split_part(split_part(pair, '=', 2), ' (', 1) AS variant,
            COUNT(DISTINCT user_id) AS resolved_users
-         FROM events
+         FROM events,
+              LATERAL regexp_split_to_table(properties->>'resolved', ',\\s*') AS pair
          WHERE public_key = $1
            AND event_name = 'paywall_resolved'
            AND created_at >= now() - make_interval(hours => $2::int)
+           AND position('=' in pair) > 0
          GROUP BY 1
        ),
        shown AS (
