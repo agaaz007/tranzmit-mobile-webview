@@ -1,6 +1,6 @@
 import type { ServerResponse } from "node:http";
 
-const API_BASE = process.env.API_BASE_URL || "https://tranzmit-api-production.up.railway.app";
+const API_BASE = process.env.API_BASE_URL || "https://api.tranzmitai.com";
 
 export function getSnippet(publicKey: string): string {
   return `<!-- Tranzmit SDK -->

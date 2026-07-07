@@ -57,7 +57,7 @@ describe("config", () => {
 
       expect(result).toEqual(mockConfig);
       expect(fetch).toHaveBeenCalledWith(
-        "https://tranzmit-api-production.up.railway.app/v1/config",
+        "https://api.tranzmitai.com/v1/config",
         expect.objectContaining({ method: "POST" })
       );
       const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);

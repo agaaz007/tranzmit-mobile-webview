@@ -26,7 +26,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const API_HOST = process.env.TRANZMIT_API_HOST || "api-production-2146.up.railway.app";
+const API_HOST = process.env.TRANZMIT_API_HOST || "api.tranzmitai.com";
 const PUBLIC_KEY = process.env.SEED_PUBLIC_KEY || "pk_live_a1323f76d397778b6ed5eb04";
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 

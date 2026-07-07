@@ -3,7 +3,7 @@ import type { ConfigResponse, PlacementConfig } from "./config.js";
 import type { TranzmitIdentity } from "./identity.js";
 import { hashString, resolveIdentity, stableJson } from "./identity.js";
 
-export const DEFAULT_API_BASE_URL = "https://tranzmit-api-production.up.railway.app";
+export const DEFAULT_API_BASE_URL = "https://api.tranzmitai.com";
 
 const CONFIG_KEY_PREFIX = "tranzmit:config:";
 const FETCH_TIMEOUT_MS = 8000;

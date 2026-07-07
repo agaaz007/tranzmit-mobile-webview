@@ -1452,7 +1452,7 @@ export default function App() {
   return (
     <TranzmitProvider
       publicKey="${input.publicKey}"
-      apiBaseUrl="https://your-tranzmit-api.up.railway.app"
+      apiBaseUrl="https://api.tranzmitai.com"
       userId={currentUser?.id}
     >
       <YourApp />
@@ -1502,7 +1502,7 @@ void main() {
     TranzmitProvider(
       config: const TranzmitConfig(
         publicKey: "${input.publicKey}",
-        apiBaseUrl: "https://your-tranzmit-api.up.railway.app",
+        apiBaseUrl: "https://api.tranzmitai.com",
       ),
       child: const YourApp(),
     ),
@@ -1550,7 +1550,7 @@ let tranzmitPublicKey = "${input.publicKey}"`;
       ? "Prepare the Swift app"
       : "Drop into the React Native app";
 
-  const configCurl = `curl -X POST https://your-tranzmit-api.up.railway.app/v1/config \\
+  const configCurl = `curl -X POST https://api.tranzmitai.com/v1/config \\
   -H 'Content-Type: application/json' \\
   -d '{
     "public_key": "${input.publicKey}",

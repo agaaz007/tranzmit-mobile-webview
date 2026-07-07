@@ -117,7 +117,7 @@ The `trigger` string is just a key that maps to a placement you configured in th
 ### Vanilla JS (works with any webapp)
 
 ```html
-<script src="https://tranzmit-api-production.up.railway.app/sdk/v1.0.0/tranzmit.js"></script>
+<script src="https://api.tranzmitai.com/sdk/v1.0.0/tranzmit.js"></script>
 <script>
   // Call once at app startup
   Tranzmit.init({
@@ -130,7 +130,7 @@ The `trigger` string is just a key that maps to a placement you configured in th
     userTraits: {
       plan: user && user.plan
     },
-    apiBaseUrl: "https://tranzmit-api-production.up.railway.app"
+    apiBaseUrl: "https://api.tranzmitai.com"
   });
 
   // Gate a feature — call this wherever you want to show a paywall
@@ -258,7 +258,7 @@ await Tranzmit.init({ publicKey: "pk_live_xxx", userId: user.id });
 | `identifiers` | object | no | Extra stable IDs for advanced experiment units (`accountID`, `companyID`, etc.). The SDK automatically adds a browser `stableID` fallback. |
 | `userTraits` | object | no | Traits for targeting (plan, signup_date, etc.) |
 | `privateTraits` | object | no | Traits used for targeting but not stored in Tranzmit event rows |
-| `apiBaseUrl` | string | no | **Required** when your Tranzmit server is not the default `https://tranzmit-api-production.up.railway.app` host. Each client/project gets its own API URL and public key pair. |
+| `apiBaseUrl` | string | no | **Required** when your Tranzmit server is not the default `https://api.tranzmitai.com` host. Each client/project gets its own API URL and public key pair. |
 | `onError` | function | no | Error callback |
 
 ### What the SDK Calls For You
@@ -460,7 +460,7 @@ Use the API smoke test to verify config fetch, event ingestion, and recent-event
 
 ```bash
 npm run smoke:sdk -- \
-  --base https://tranzmit-api-production.up.railway.app \
+  --base https://api.tranzmitai.com \
   --secret "$ADMIN_SECRET" \
   --public-key pk_test_xxx
 ```

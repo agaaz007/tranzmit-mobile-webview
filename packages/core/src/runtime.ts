@@ -1,7 +1,7 @@
 import type { TranzmitConfig } from "./types.js";
 import type { TranzmitIdentity } from "@tranzmit/shared";
 
-export const DEFAULT_API_BASE_URL = "https://tranzmit-api-production.up.railway.app";
+export const DEFAULT_API_BASE_URL = "https://api.tranzmitai.com";
 const STABLE_ID_PREFIX = "tranzmit:stable_id:";
 const memoryStableIds = new Map<string, string>();
 
