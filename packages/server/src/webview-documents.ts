@@ -30,10 +30,28 @@ export interface WebViewDocumentPayload {
 }
 
 const DEFAULT_DOCUMENT_CACHE_TTL_SECONDS = 60 * 60 * 24 * 365;
+const TRUSTED_PUBLIC_API_HOSTS = new Set([
+  "api.tranzmitai.com",
+  "api-proxy-preview.tranzmitai.com",
+]);
 
 export function publicApiBaseUrl(req: IncomingMessage): string {
   const explicit = process.env.PUBLIC_API_BASE_URL?.replace(/\/$/, "");
   if (explicit) return explicit;
+
+  // Vercel's external rewrite reaches Railway through the generated Railway
+  // hostname, so Railway replaces x-forwarded-host with that origin. Accept a
+  // dedicated, exact allowlisted header from the Vercel route to keep hosted
+  // document URLs on the client-visible Vercel hostname. Direct Railway
+  // requests do not send this header and retain their existing Railway URLs.
+  const requestedPublicHost = req.headers["x-tranzmit-public-host"];
+  const publicHost = Array.isArray(requestedPublicHost)
+    ? requestedPublicHost[0]
+    : requestedPublicHost;
+  const normalizedPublicHost = publicHost?.trim().toLowerCase();
+  if (normalizedPublicHost && TRUSTED_PUBLIC_API_HOSTS.has(normalizedPublicHost)) {
+    return `https://${normalizedPublicHost}`;
+  }
 
   const host = req.headers["x-forwarded-host"] || req.headers.host || "localhost:3000";
   const proto = req.headers["x-forwarded-proto"] || "http";
