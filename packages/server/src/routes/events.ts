@@ -4,6 +4,7 @@ import { insertEvents, validatePublicKey } from "../db.js";
 import { readBody } from "../middleware/body-parser.js";
 import { publicIdentity, resolveEventIdentity } from "../identity.js";
 import { logStatsigEvents } from "../statsig.js";
+import { eventBatchIdempotency } from "../event-batch-idempotency.js";
 
 const MAX_EVENTS_PER_BATCH = 50;
 
@@ -29,45 +30,48 @@ export async function handleEvents(
     return;
   }
 
-  const identity = resolveEventIdentity(payload as EventBatch);
+  const batch = payload as EventBatch;
+  const identity = resolveEventIdentity(batch);
   if (!identity) {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Missing identity: provide userId or identity.identifiers" }));
     return;
   }
 
-  if (payload.events.length === 0) {
+  if (batch.events.length === 0) {
     res.writeHead(204);
     res.end();
     return;
   }
 
-  if (payload.events.length > MAX_EVENTS_PER_BATCH) {
+  if (batch.events.length > MAX_EVENTS_PER_BATCH) {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: `Max ${MAX_EVENTS_PER_BATCH} events per batch` }));
     return;
   }
 
   try {
-    const valid = await validatePublicKey(payload.publicKey);
+    const valid = await validatePublicKey(batch.publicKey);
     if (!valid) {
       res.writeHead(401, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Invalid public key" }));
       return;
     }
 
-    await insertEvents(
-      payload.publicKey,
-      identity.storageUserId,
-      payload.sessionId,
-      payload.events,
-      publicIdentity(identity)
-    );
-    await logStatsigEvents({
-      publicKey: payload.publicKey,
-      identity,
-      sessionId: payload.sessionId,
-      events: payload.events,
+    await eventBatchIdempotency.run(raw, async () => {
+      await insertEvents(
+        batch.publicKey,
+        identity.storageUserId,
+        batch.sessionId,
+        batch.events,
+        publicIdentity(identity)
+      );
+      await logStatsigEvents({
+        publicKey: batch.publicKey,
+        identity,
+        sessionId: batch.sessionId,
+        events: batch.events,
+      });
     });
   } catch (err) {
     console.error("[Tranzmit] Failed to insert events:", err);

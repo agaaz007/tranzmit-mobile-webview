@@ -698,6 +698,29 @@ describe("POST /events", () => {
 	    );
 	  });
 
+  it("inserts and forwards an identical successful batch only once", async () => {
+    const db = await import("../src/db.js");
+    const statsig = await import("../src/statsig.js");
+    const { eventBatchIdempotency } = await import("../src/event-batch-idempotency.js");
+    eventBatchIdempotency.clear();
+    vi.mocked(db.insertEvents).mockClear();
+    vi.mocked(statsig.logStatsigEvents).mockClear();
+    const body = JSON.stringify({
+      publicKey: "pk_test_valid",
+      userId: "u_dedupe",
+      sessionId: "sess_dedupe",
+      events: [{ event: "impression", timestamp: 1_725_000_000_000 }],
+    });
+
+    const first = await makeRequest("/events", "POST", body);
+    const retry = await makeRequest("/events", "POST", body);
+
+    expect(first.status).toBe(204);
+    expect(retry.status).toBe(204);
+    expect(vi.mocked(db.insertEvents)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(statsig.logStatsigEvents)).toHaveBeenCalledTimes(1);
+  });
+
 	  it("accepts anonymous events with stable identity", async () => {
 	    const statsig = await import("../src/statsig.js");
 	    const res = await makeRequest(
