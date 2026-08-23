@@ -77,7 +77,7 @@ describe("route-specific CORS", () => {
   });
 
   it("never emits wildcard CORS for admin or dashboard routes", () => {
-    for (const path of ["/", "/config-dashboard", "/admin/clients", "/v1/admin/clients", "/v1/usage"]) {
+    for (const path of ["/", "/config-dashboard", "/config-dashboard/app.js", "/admin/clients", "/v1/admin/clients", "/v1/usage"]) {
       const crossOrigin = response();
       applyRouteCors(request({ origin: "https://evil.example" }), crossOrigin.res, path);
       expect(crossOrigin.header("Access-Control-Allow-Origin"), path).toBeUndefined();

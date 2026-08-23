@@ -4,6 +4,19 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { ConfigResponse } from "@tranzmit/shared";
 
 vi.mock("../src/db.js", () => ({
+  query: vi.fn(async (sql: string) => ({
+    rows: /FROM clients\s+WHERE public_key/i.test(sql) ? [{
+      id: "client-test",
+      public_key: "pk_test_valid",
+      project_key: "test-project",
+      environment_kind: "test",
+      management_status: "editable",
+      config_source: "legacy",
+      sdk_stack: "react_native",
+      statsig_project_name: null,
+      statsig_server_secret_env_var: null,
+    }] : [],
+  })),
   validatePublicKey: vi.fn(async (key: string) => key === "pk_test_valid"),
 	  getPlacementsForKey: vi.fn(async () => [
 	    {

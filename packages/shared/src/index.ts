@@ -2,7 +2,20 @@ export type {
   PaywallSpec,
   ProductSpec,
   AssetManifest,
+  PaywallLocalization,
+  CheckoutSpec,
+  CheckoutUiConfig,
 } from "./spec.js";
+
+export {
+  extractLocalizationTokens,
+  extractRelativeAssetReferences,
+  localizeHtml,
+  resolveLocalizedStrings,
+  validateLocalizationCoverage,
+  type LocalizationIssue,
+  type LocalizationValidationResult,
+} from "./localization.js";
 
 export type {
   PlatformAdapter,

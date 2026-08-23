@@ -13,6 +13,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "migrate": "tsx packages/server/src/migrations.ts",
+    "backfill:config-v2": "tsx packages/server/src/backfill-v2.ts",
+    "compare:config-v2": "tsx packages/server/src/compare-v2.ts",
     "dev:server": "npm run dev --workspace=packages/server",
     "seed": "node scripts/seed.mjs",
     "smoke:admin": "node scripts/smoke-admin.mjs"

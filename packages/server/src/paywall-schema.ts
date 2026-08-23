@@ -1,4 +1,5 @@
 import Ajv, { type ErrorObject } from "ajv";
+import { validateLocalizationCoverage } from "@tranzmit/shared";
 
 const colorProperties = {
   backgroundColor: { type: "string" },
@@ -132,6 +133,73 @@ export const paywallSpecSchema = {
         },
       },
     },
+    security: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        allowedOrigins: {
+          type: "array",
+          uniqueItems: true,
+          items: {
+            type: "string",
+            pattern: "^https?://[^*/?#@\\s]+$",
+          },
+        },
+        externalUrlHosts: {
+          type: "array",
+          uniqueItems: true,
+          items: {
+            type: "string",
+            pattern: "^(?:\\[[0-9A-Fa-f:.]+\\]|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)$",
+          },
+        },
+        externalUrlSchemes: {
+          type: "array",
+          uniqueItems: true,
+          items: {
+            type: "string",
+            pattern: "^[a-z][a-z0-9+.-]*$",
+          },
+        },
+      },
+    },
+    checkout: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        provider: {
+          type: "object",
+          additionalProperties: true,
+        },
+        ui: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            enabled: { type: "boolean" },
+            showToggle: { type: "boolean" },
+            appPriority: {
+              type: "array",
+              maxItems: 32,
+              items: {
+                type: "string",
+                pattern: "^[A-Za-z0-9._-]{1,64}$",
+              },
+            },
+            defaultApp: {
+              type: "string",
+              pattern: "^[A-Za-z0-9._-]{1,64}$",
+            },
+            maxVisibleApps: {
+              type: "integer",
+              minimum: 1,
+              maximum: 12,
+            },
+            iconStyle: { enum: ["tile", "circle"] },
+            fallbackToPlainCta: { type: "boolean" },
+          },
+        },
+      },
+    },
     header: {
       type: "object",
       additionalProperties: false,
@@ -242,10 +310,16 @@ export const paywallSpecSchema = {
       additionalProperties: false,
       required: ["defaultLocale", "translations"],
       properties: {
-        defaultLocale: { type: "string", minLength: 1 },
+        defaultLocale: {
+          type: "string",
+          pattern: "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$",
+        },
         translations: {
           type: "object",
           minProperties: 1,
+          propertyNames: {
+            pattern: "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$",
+          },
           additionalProperties: {
             type: "object",
             additionalProperties: { type: "string" },
@@ -346,6 +420,34 @@ export function validatePaywallSpec(spec: unknown): ValidationResult {
   };
   if (!result.valid) return result;
 
+  const localization = (spec as { localization?: {
+    defaultLocale?: unknown;
+    translations?: Record<string, unknown>;
+  } } | null)?.localization;
+  if (localization) {
+    const tags = new Map<string, string>([
+      ["/localization/defaultLocale", String(localization.defaultLocale || "")],
+      ...Object.keys(localization.translations || {}).map(
+        (tag) => [`/localization/translations/${tag}`, tag] as [string, string]
+      ),
+    ]);
+    for (const [path, tag] of tags) {
+      if (!isCanonicalRegisteredLocale(tag)) {
+        result.errors.push({
+          path,
+          message: `"${tag}" must be a canonical registered BCP-47 locale tag`,
+          keyword: "locale",
+        });
+      }
+    }
+  }
+
+  result.errors.push(...validateLocalizationCoverage(spec as any).issues);
+  if (result.errors.length > 0) {
+    result.valid = false;
+    return result;
+  }
+
   const bytes = documentBytes(spec);
   if (bytes > DOCUMENT_REJECT_BYTES) {
     result.valid = false;
@@ -367,6 +469,31 @@ export function validatePaywallSpec(spec: unknown): ValidationResult {
     });
   }
   return result;
+}
+
+function isCanonicalRegisteredLocale(tag: string): boolean {
+  if (!tag) return false;
+  try {
+    const canonical = Intl.getCanonicalLocales(tag);
+    if (canonical.length !== 1 || canonical[0] !== tag) return false;
+
+    // getCanonicalLocales validates structure and casing but accepts unknown
+    // language/region codes. When full ICU data is available on the server,
+    // reject those too (for example hi-EN).
+    const locale = new Intl.Locale(tag);
+    const DisplayNames = (Intl as any).DisplayNames;
+    if (!DisplayNames) return true;
+    const known = (type: "language" | "region" | "script", value: string | undefined) => {
+      if (!value) return true;
+      const names = new DisplayNames(["en"], { type, fallback: "none" });
+      return names.of(value) !== undefined;
+    };
+    return known("language", locale.language)
+      && known("script", locale.script)
+      && known("region", locale.region);
+  } catch {
+    return false;
+  }
 }
 
 function formatErrors(errors: ErrorObject[]): ValidationResult["errors"] {

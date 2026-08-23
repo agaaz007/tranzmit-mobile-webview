@@ -25,6 +25,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/tranzmit_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/tranzmit_test
       PUBLIC_API_BASE_URL: https://api.example.test
 
     steps:
@@ -36,5 +37,9 @@ jobs:
       - run: npm ci --legacy-peer-deps
       - run: npm run build
       - run: npm test
+        env:
+          TEST_DATABASE_URL: ""
+      - run: npx vitest run packages/server/tests/postgres-v2-upgrade.integration.test.ts --no-file-parallelism
       - run: npm run migrate
       - run: npm run migrate
+      - run: npx vitest run packages/server/tests/postgres-v2.integration.test.ts --no-file-parallelism

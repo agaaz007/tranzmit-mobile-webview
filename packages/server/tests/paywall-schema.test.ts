@@ -3,23 +3,112 @@ import { describe, expect, it } from "vitest";
 import { validatePaywallSpec } from "../src/paywall-schema.js";
 
 describe("paywall spec schema", () => {
-  it("allows localization metadata for tokenized WebView documents", () => {
-    const result = validatePaywallSpec({
+  function validSpec(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
       renderer: "webview",
-      document: { html: "<main><h1>{{headline}}</h1></main>" },
+      document: { html: "<main>Upgrade</main>" },
       products: [{ id: "pro", name: "Pro", price: "₹999/year" }],
       cta: { text: "Continue" },
       dismiss: { enabled: true },
+      ...overrides,
+    };
+  }
+
+  it("allows exact canonical localization tags for tokenized WebView documents", () => {
+    const result = validatePaywallSpec(validSpec({
+      document: { html: "<main><h1>{{headline}}</h1></main>" },
       localization: {
-        defaultLocale: "hi-en",
+        defaultLocale: "hi-Latn",
         translations: {
-          "hi-en": { headline: "Pro unlock karein" },
+          "hi-Latn": { headline: "Pro unlock karein" },
+          hi: { headline: "प्रो अनलॉक करें" },
           en: { headline: "Unlock Pro" },
         },
       },
-    });
+    }));
 
     expect(result).toEqual({ valid: true, errors: [], warnings: [] });
+  });
+
+  it("rejects non-canonical or unregistered locale tags", () => {
+    for (const locale of ["hi-en", "hi-EN", "hi-latn"]) {
+      const result = validatePaywallSpec(validSpec({
+        document: { html: "<main><h1>{{headline}}</h1></main>" },
+        localization: {
+          defaultLocale: locale,
+          translations: { [locale]: { headline: "Pro unlock karein" } },
+        },
+      }));
+      expect(result.valid, locale).toBe(false);
+      expect(result.errors.some((error) => error.keyword === "locale"), locale).toBe(true);
+    }
+  });
+
+  it("accepts the SDK security and checkout contract", () => {
+    const result = validatePaywallSpec(validSpec({
+      security: {
+        allowedOrigins: ["https://paywalls.tranzmit.com"],
+        externalUrlHosts: ["billing.example.test"],
+        externalUrlSchemes: ["https", "upi"],
+      },
+      checkout: {
+        provider: {
+          planId: "plan_yearly",
+          mandate: { maxAmount: 15_000, recurring: true },
+        },
+        ui: {
+          enabled: true,
+          showToggle: true,
+          appPriority: ["phonepe", "gpay", "net.one97.paytm"],
+          defaultApp: "gpay",
+          maxVisibleApps: 5,
+          iconStyle: "tile",
+          fallbackToPlainCta: true,
+        },
+      },
+    }));
+
+    expect(result).toEqual({ valid: true, errors: [], warnings: [] });
+  });
+
+  it("rejects wildcard or path-based security allowlist entries", () => {
+    const result = validatePaywallSpec(validSpec({
+      security: {
+        allowedOrigins: ["https://*.example.com/path"],
+        externalUrlHosts: ["https://billing.example.test"],
+        externalUrlSchemes: ["HTTPS"],
+      },
+    }));
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.map((error) => error.path)).toEqual(expect.arrayContaining([
+      "/security/allowedOrigins/0",
+      "/security/externalUrlHosts/0",
+      "/security/externalUrlSchemes/0",
+    ]));
+  });
+
+  it("rejects malformed checkout UI values", () => {
+    const result = validatePaywallSpec(validSpec({
+      checkout: {
+        ui: {
+          appPriority: ["bad id"],
+          defaultApp: "x".repeat(65),
+          maxVisibleApps: 13,
+          iconStyle: "square",
+          unexpected: true,
+        },
+      },
+    }));
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.map((error) => error.path)).toEqual(expect.arrayContaining([
+      "/checkout/ui",
+      "/checkout/ui/appPriority/0",
+      "/checkout/ui/defaultApp",
+      "/checkout/ui/maxVisibleApps",
+      "/checkout/ui/iconStyle",
+    ]));
   });
 
   // Size guardrails: 271-290KB documents (base64 PNGs in the html) caused the

@@ -10,6 +10,9 @@ export async function runMigrations(): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Railway can briefly overlap deploys. Serialize migration runners inside
+    // the transaction so only one image may inspect/apply schema files.
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('tranzmit-schema-migrations'))");
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         id TEXT PRIMARY KEY,

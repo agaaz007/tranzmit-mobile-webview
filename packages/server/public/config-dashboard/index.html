@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tranzmit publishing</title>
+  <link rel="stylesheet" href="/config-dashboard/styles.css">
+  <script src="/config-dashboard/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/config-dashboard" aria-label="Tranzmit publishing home">
+      <span class="brand-mark" aria-hidden="true">T</span>
+      <span>
+        <strong>Tranzmit</strong>
+        <small>Paywall publishing</small>
+      </span>
+    </a>
+
+    <div class="environment-control">
+      <label for="environmentSelect">Environment</label>
+      <select id="environmentSelect" aria-describedby="environmentSummary">
+        <option value="">Loading environments...</option>
+      </select>
+      <span id="environmentSummary" class="environment-summary"></span>
+    </div>
+
+    <button class="button button-secondary" id="refreshButton" type="button">Refresh</button>
+  </header>
+
+  <div id="globalNotice" class="notice notice-hidden" role="status" aria-live="polite"></div>
+
+  <main class="shell">
+    <nav class="section-tabs" aria-label="Configuration sections">
+      <button class="section-tab is-active" type="button" data-section="paywalls">Paywalls</button>
+      <button class="section-tab" type="button" data-section="placements">Placements</button>
+    </nav>
+
+    <section id="lockedBanner" class="locked-banner is-hidden" aria-live="polite">
+      <strong>Read-only environment</strong>
+      <span>This legacy customer configuration can be inspected, but publishing controls are disabled.</span>
+    </section>
+
+    <div id="loadingState" class="state-panel">
+      <strong>Loading configuration</strong>
+      <span>Fetching environments and published pointers.</span>
+    </div>
+
+    <div id="errorState" class="state-panel state-error is-hidden" role="alert">
+      <strong>Could not load configuration</strong>
+      <span id="errorMessage"></span>
+      <button class="button button-secondary" id="retryButton" type="button">Try again</button>
+    </div>
+
+    <div id="workspace" class="workspace is-hidden">
+      <aside class="collection-panel" aria-label="Configuration items">
+        <div class="collection-head">
+          <div>
+            <h1 id="collectionTitle">Paywalls</h1>
+            <p id="collectionSubtitle">Select a paywall to inspect its releases.</p>
+          </div>
+          <span id="collectionCount" class="count">0</span>
+        </div>
+        <div id="collectionList" class="collection-list"></div>
+      </aside>
+
+      <section class="detail-panel">
+        <div id="emptyDetail" class="state-panel">
+          <strong>Select an item</strong>
+          <span>Published state, candidates, diffs, and rollback history appear here.</span>
+        </div>
+
+        <div id="paywallDetail" class="detail-content is-hidden">
+          <header class="detail-head">
+            <div>
+              <div class="title-line">
+                <h2 id="paywallName"></h2>
+                <span id="paywallKey" class="code-chip"></span>
+              </div>
+              <p id="paywallPointer" class="muted"></p>
+            </div>
+            <div class="header-actions">
+              <button id="promoteButton" class="button button-secondary" type="button">Create live candidate</button>
+              <button id="savePaywallButton" class="button button-primary" type="button">Save candidate</button>
+            </div>
+          </header>
+
+          <div class="detail-grid">
+            <section class="editor-panel">
+              <div class="panel-head">
+                <div>
+                  <h3>Candidate content</h3>
+                  <p>Saving creates an immutable release. It does not publish it.</p>
+                </div>
+                <button id="previewButton" class="button button-secondary" type="button">Refresh preview</button>
+              </div>
+
+              <div class="field">
+                <label for="documentHtml">Document HTML</label>
+                <textarea id="documentHtml" class="code-input code-input-large" spellcheck="false"></textarea>
+              </div>
+
+              <details class="editor-group">
+                <summary>Document CSS, JavaScript, and base URL</summary>
+                <div class="editor-group-body">
+                  <div class="field">
+                    <label for="documentCss">Document CSS</label>
+                    <textarea id="documentCss" class="code-input" spellcheck="false"></textarea>
+                  </div>
+                  <div class="field">
+                    <label for="documentJs">Document JavaScript</label>
+                    <textarea id="documentJs" class="code-input" spellcheck="false"></textarea>
+                  </div>
+                  <div class="field">
+                    <label for="documentBaseUrl">Base URL</label>
+                    <input id="documentBaseUrl" type="url" placeholder="https://api.example.com/assets/">
+                  </div>
+                </div>
+              </details>
+
+              <div class="field">
+                <label for="localizationJson">Localization JSON</label>
+                <span class="field-help">Edit defaultLocale and translations. Every document token must exist in every locale.</span>
+                <textarea id="localizationJson" class="code-input" spellcheck="false"></textarea>
+              </div>
+
+              <div class="editor-columns">
+                <div class="field">
+                  <label for="productsJson">Products JSON</label>
+                  <span class="field-help">Billing product IDs remain environment-specific.</span>
+                  <textarea id="productsJson" class="code-input" spellcheck="false"></textarea>
+                </div>
+                <div class="field">
+                  <label for="checkoutJson">Checkout JSON</label>
+                  <span class="field-help">Use null when the paywall has no checkout context.</span>
+                  <textarea id="checkoutJson" class="code-input" spellcheck="false"></textarea>
+                </div>
+              </div>
+
+              <details class="editor-group">
+                <summary>Other content JSON</summary>
+                <div class="editor-group-body">
+                  <p class="field-help">All content fields except document and localization. Products and checkout are stored separately.</p>
+                  <div class="field">
+                    <label for="contentJson">Content JSON</label>
+                    <textarea id="contentJson" class="code-input" spellcheck="false"></textarea>
+                  </div>
+                </div>
+              </details>
+            </section>
+
+            <aside class="preview-panel">
+              <div class="panel-head preview-head">
+                <div>
+                  <h3>Exact document preview</h3>
+                  <p>The stored HTML, CSS, and JavaScript are rendered without rebuilding a template.</p>
+                </div>
+                <label class="compact-field" for="previewLocale">
+                  Locale
+                  <select id="previewLocale"></select>
+                </label>
+              </div>
+              <div class="device-frame">
+                <iframe id="paywallPreview" title="Paywall document preview" sandbox="allow-scripts allow-forms"></iframe>
+              </div>
+            </aside>
+          </div>
+
+          <section class="history-panel">
+            <div class="panel-head">
+              <div>
+                <h3>Release history</h3>
+                <p>Select a candidate to review its diff, publish it, or restore a previous release.</p>
+              </div>
+            </div>
+            <div id="paywallReleases" class="history-list"></div>
+          </section>
+        </div>
+
+        <div id="placementDetail" class="detail-content is-hidden">
+          <header class="detail-head">
+            <div>
+              <div class="title-line">
+                <h2 id="placementTrigger"></h2>
+                <span id="placementStatus" class="status-tag"></span>
+              </div>
+              <p id="placementPointer" class="muted"></p>
+            </div>
+            <button id="savePlacementButton" class="button button-primary" type="button">Save routing candidate</button>
+          </header>
+
+          <section class="editor-panel routing-editor">
+            <div class="editor-columns routing-columns">
+              <div class="field">
+                <label for="routingStatus">Status</label>
+                <select id="routingStatus">
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="defaultBinding">Default paywall</label>
+                <select id="defaultBinding"></select>
+              </div>
+              <div class="field">
+                <label for="defaultVariantKey">Default variant key</label>
+                <input id="defaultVariantKey" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="statsigExperimentId">Statsig experiment ID</label>
+                <input id="statsigExperimentId" autocomplete="off">
+              </div>
+            </div>
+            <div class="editor-columns">
+              <div class="field">
+                <label for="targetingRulesJson">Targeting rules JSON</label>
+                <textarea id="targetingRulesJson" class="code-input" spellcheck="false"></textarea>
+              </div>
+              <div class="field">
+                <label for="variantsJson">Variants JSON</label>
+                <span class="field-help">Each entry needs variantKey, bindingId, status, weight, and fallbackRank.</span>
+                <textarea id="variantsJson" class="code-input" spellcheck="false"></textarea>
+              </div>
+            </div>
+          </section>
+
+          <section class="history-panel">
+            <div class="panel-head">
+              <div>
+                <h3>Routing history</h3>
+                <p>Only publishing changes the placement pointer served by the SDK.</p>
+              </div>
+            </div>
+            <div id="placementRevisions" class="history-list"></div>
+          </section>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="confirmationDialog" class="dialog">
+    <form method="dialog" id="confirmationForm">
+      <div class="dialog-head">
+        <div>
+          <h2 id="dialogTitle">Review change</h2>
+          <p id="dialogSubtitle"></p>
+        </div>
+        <button class="close-button" value="cancel" aria-label="Close dialog" type="submit">Close</button>
+      </div>
+      <div class="dialog-body">
+        <pre id="diffOutput" class="diff-output"></pre>
+        <div class="confirm-field">
+          <label for="confirmationText">Type <code id="confirmationPhrase"></code> to confirm</label>
+          <input id="confirmationText" autocomplete="off">
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button class="button button-secondary" value="cancel" type="submit">Cancel</button>
+        <button id="confirmActionButton" class="button button-danger" value="confirm" type="submit" disabled>Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

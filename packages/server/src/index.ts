@@ -6,12 +6,10 @@ import { serveConfigDashboard } from "./routes/config-dashboard.js";
 import { initStatsig, isConfigured as isStatsigConfigured, isInitialized as isStatsigInitialized, shutdownStatsig } from "./statsig.js";
 import { checkRateLimit, LIMITS } from "./middleware/rate-limit.js";
 import { requireDashboardAuth } from "./middleware/dashboard-auth.js";
-import { handleUsage } from "./routes/usage.js";
 import { applyRouteCors, handleCorsPreflight } from "./middleware/cors.js";
 import { handlePaywallDocument } from "./routes/paywall-documents.js";
 import { handleAsset } from "./routes/assets.js";
 import { pool } from "./db.js";
-import { runMigrations } from "./migrations.js";
 import { startFallbackDetector } from "./fallback-detector.js";
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
@@ -89,15 +87,17 @@ async function handler(req: IncomingMessage, res: ServerResponse): Promise<void>
     }
 
     // --- Mobile config dashboard (password-gated, no rate limit) ---
-    if (path === "/config-dashboard") {
+    if (path === "/config-dashboard" || path.startsWith("/config-dashboard/")) {
       if (!requireDashboardAuth(req, res)) return;
-      serveConfigDashboard(res);
+      if (serveConfigDashboard(res, path)) return;
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Dashboard asset not found" }));
       return;
     }
 
     // --- Admin routes ---
-    if (path.startsWith("/admin") || path.startsWith("/v1/admin")) {
-      const adminPath = path.replace(/^\/v1/, "");
+    if (path.startsWith("/admin") || path.startsWith("/v1/admin") || path === "/v1/usage") {
+      const adminPath = path === "/v1/usage" ? "/admin/usage" : path.replace(/^\/v1/, "");
       const rl = checkRateLimit(`admin:${ip}`, LIMITS.admin);
       if (!rl.allowed) { rateLimited(res, rl.resetAt); return; }
       await handleAdmin(req, res, adminPath);
@@ -158,14 +158,6 @@ async function handler(req: IncomingMessage, res: ServerResponse): Promise<void>
       return;
     }
 
-    // --- Usage/billing endpoint ---
-    if ((path === "/v1/usage" || path === "/admin/usage") && req.method === "GET") {
-      const rl = checkRateLimit(`admin:${ip}`, LIMITS.admin);
-      if (!rl.allowed) { rateLimited(res, rl.resetAt); return; }
-      await handleUsage(req, res);
-      return;
-    }
-
     // --- 404 ---
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Not found" }));
@@ -184,7 +176,6 @@ async function handler(req: IncomingMessage, res: ServerResponse): Promise<void>
 }
 
 async function start(): Promise<void> {
-  await runMigrations();
   await initStatsig();
   // No-op unless FALLBACK_DETECTOR_ENABLED=1 (deploy stays inert until enabled).
   startFallbackDetector();
