@@ -41,9 +41,9 @@ describe("GET /admin/events/recent", () => {
     process.env.ADMIN_SECRET = "test-secret";
   });
 
-  it("allows dashboard admin requests without an admin secret", async () => {
+  it("rejects admin requests without credentials", async () => {
     const res = await makeAdminRequest("/admin/events/recent");
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
   it("returns recent events with a bounded limit", async () => {
@@ -200,5 +200,144 @@ describe("PATCH /admin/placements/:id", () => {
       error: "Placement not found. Refresh the dashboard and try again.",
     });
     expect(vi.mocked(db.query)).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("workspace admin isolation", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    process.env.ADMIN_SECRET = "test-secret";
+  });
+
+  it("scopes placement listings to the authenticated workspace", async () => {
+    const db = await import("../src/db.js");
+    vi.mocked(db.query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "client_1", public_key: "pk_live_1", secret_key: "workspace-secret" }],
+      } as never)
+      .mockResolvedValueOnce({ rows: [] } as never);
+
+    const res = await makeAdminRequest("/admin/placements", {
+      Authorization: "Bearer workspace-secret",
+    });
+
+    expect(res.status).toBe(200);
+    expect(vi.mocked(db.query)).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("WHERE c.id = $1"),
+      ["client_1"]
+    );
+  });
+
+  it("prevents workspace credentials from creating clients", async () => {
+    const db = await import("../src/db.js");
+    vi.mocked(db.query).mockResolvedValueOnce({
+      rows: [{ id: "client_1", public_key: "pk_live_1", secret_key: "workspace-secret" }],
+    } as never);
+
+    const res = await makeAdminRequest(
+      "/admin/clients",
+      { Authorization: "Bearer workspace-secret", "Content-Type": "application/json" },
+      "POST",
+      JSON.stringify({ name: "Other tenant" })
+    );
+
+    expect(res.status).toBe(403);
+    expect(vi.mocked(db.query)).toHaveBeenCalledTimes(1);
+  });
+
+  it("scopes recent events to the authenticated public key", async () => {
+    const db = await import("../src/db.js");
+    vi.mocked(db.query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "client_1", public_key: "pk_live_1", secret_key: "workspace-secret" }],
+      } as never)
+      .mockResolvedValueOnce({ rows: [] } as never);
+
+    const res = await makeAdminRequest("/admin/events/recent?limit=1", {
+      Authorization: "Bearer workspace-secret",
+    });
+
+    expect(res.status).toBe(200);
+    expect(vi.mocked(db.query)).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("WHERE public_key = $1"),
+      ["pk_live_1", 1]
+    );
+  });
+
+  it("ignores a different client query when workspace credentials request usage", async () => {
+    const db = await import("../src/db.js");
+    vi.mocked(db.query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "client_1", public_key: "pk_live_1", secret_key: "workspace-secret" }],
+      } as never)
+      .mockResolvedValueOnce({ rows: [] } as never)
+      .mockResolvedValueOnce({ rows: [] } as never);
+
+    const res = await makeAdminRequest(
+      "/admin/usage?client=pk_live_other&period=7d",
+      { Authorization: "Bearer workspace-secret" }
+    );
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body)).toEqual(expect.objectContaining({
+      client: "pk_live_1",
+      period: "7d",
+    }));
+    expect(vi.mocked(db.query)).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("WHERE public_key = $1"),
+      ["pk_live_1", expect.any(String)]
+    );
+    expect(vi.mocked(db.query)).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining("WHERE public_key = $1"),
+      ["pk_live_1", expect.any(String)]
+    );
+  });
+
+  it("prevents workspace credentials from deleting a client", async () => {
+    const db = await import("../src/db.js");
+    vi.mocked(db.query).mockResolvedValueOnce({
+      rows: [{ id: "client_1", public_key: "pk_live_1", secret_key: "workspace-secret" }],
+    } as never);
+
+    const res = await makeAdminRequest(
+      "/admin/clients/client_1",
+      { Authorization: "Bearer workspace-secret" },
+      "DELETE"
+    );
+
+    expect(res.status).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({ error: "Admin credential required" });
+    expect(vi.mocked(db.query)).toHaveBeenCalledTimes(1);
+  });
+
+  it("prevents workspace credentials from deleting another workspace's placement", async () => {
+    const db = await import("../src/db.js");
+    vi.mocked(db.query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "client_1", public_key: "pk_live_1", secret_key: "workspace-secret" }],
+      } as never)
+      .mockResolvedValueOnce({ rows: [] } as never);
+
+    const res = await makeAdminRequest(
+      "/admin/placements/pl_other",
+      { Authorization: "Bearer workspace-secret" },
+      "DELETE"
+    );
+
+    expect(res.status).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({ error: "Placement not found" });
+    expect(vi.mocked(db.query)).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("c.id = $2"),
+      ["pl_other", "client_1"]
+    );
+    expect(vi.mocked(db.query)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(db.query).mock.calls).not.toEqual(
+      expect.arrayContaining([[expect.stringContaining("DELETE FROM placements"), expect.anything()]])
+    );
   });
 });

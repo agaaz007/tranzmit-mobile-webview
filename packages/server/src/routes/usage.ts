@@ -1,19 +1,21 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { query } from "../db.js";
-import { checkAdminAuth } from "../middleware/auth.js";
+import { resolveAdminAuth, type AdminAuthContext } from "../middleware/auth.js";
 
 export async function handleUsage(
   req: IncomingMessage,
-  res: ServerResponse
+  res: ServerResponse,
+  resolvedAuth?: AdminAuthContext
 ): Promise<void> {
-  if (!checkAdminAuth(req)) {
+  const auth = resolvedAuth || await resolveAdminAuth(req);
+  if (!auth) {
     res.writeHead(401, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Unauthorized" }));
     return;
   }
 
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
-  const clientKey = url.searchParams.get("client");
+  const clientKey = auth.kind === "workspace" ? auth.publicKey : url.searchParams.get("client");
   const period = url.searchParams.get("period") || "30d";
 
   const days = parseInt(period) || 30;

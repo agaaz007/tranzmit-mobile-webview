@@ -7,6 +7,7 @@ import { initStatsig, isConfigured as isStatsigConfigured, isInitialized as isSt
 import { checkRateLimit, LIMITS } from "./middleware/rate-limit.js";
 import { requireDashboardAuth } from "./middleware/dashboard-auth.js";
 import { handleUsage } from "./routes/usage.js";
+import { applyRouteCors, handleCorsPreflight } from "./middleware/cors.js";
 import { handlePaywallDocument } from "./routes/paywall-documents.js";
 import { handleAsset } from "./routes/assets.js";
 import { pool } from "./db.js";
@@ -14,12 +15,6 @@ import { runMigrations } from "./migrations.js";
 import { startFallbackDetector } from "./fallback-detector.js";
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
-
-function setCors(res: ServerResponse): void {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-}
 
 function getClientIp(req: IncomingMessage): string {
   const forwarded = req.headers["x-forwarded-for"];
@@ -78,16 +73,11 @@ function serveHome(res: ServerResponse): void {
 }
 
 async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  setCors(res);
-
-  if (req.method === "OPTIONS") {
-    res.writeHead(204);
-    res.end();
-    return;
-  }
-
-  const url = new URL(req.url || "/", `http://${req.headers.host}`);
+  const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
   const path = url.pathname;
+  if (handleCorsPreflight(req, res, path)) return;
+  applyRouteCors(req, res, path);
+
   const ip = getClientIp(req);
 
   try {

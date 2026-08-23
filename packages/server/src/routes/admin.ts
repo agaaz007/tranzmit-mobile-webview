@@ -9,6 +9,7 @@ import {
   isValidStatsigSecretEnvVar,
 } from "../statsig.js";
 import crypto from "node:crypto";
+import { handleUsage } from "./usage.js";
 
 function unauthorized(res: ServerResponse): void {
   res.writeHead(401, { "Content-Type": "application/json" });
@@ -63,6 +64,11 @@ export async function handleAdmin(
 ): Promise<void> {
   const auth = await resolveAdminAuth(req);
   if (!auth) { unauthorized(res); return; }
+
+  if (path === "/admin/usage" && req.method === "GET") {
+    await handleUsage(req, res, auth);
+    return;
+  }
 
   // --- PAYWALL SPECS ---
 
@@ -282,6 +288,12 @@ export async function handleAdmin(
   // --- PLACEMENTS ---
 
   if (path === "/admin/placements" && req.method === "GET") {
+    const placementParams: unknown[] = [];
+    const placementFilters: string[] = [];
+    if (auth.kind === "workspace") {
+      placementParams.push(auth.workspaceId);
+      placementFilters.push(`c.id = $${placementParams.length}`);
+    }
     const result = await query<{
       id: string; public_key: string; trigger: string; enabled: boolean;
       variant_id: string; experiment_id: string | null; spec: unknown; created_at: string;
@@ -317,8 +329,10 @@ export async function handleAdmin(
        FROM placements p
        JOIN clients c ON c.public_key = p.public_key
        LEFT JOIN placement_variants pv ON pv.placement_id = p.id
+       ${placementFilters.length ? `WHERE ${placementFilters.join(" AND ")}` : ""}
        GROUP BY p.id, c.name, c.statsig_project_name, c.statsig_server_secret_env_var
-       ORDER BY p.created_at DESC`
+       ORDER BY p.created_at DESC`,
+      placementParams
     );
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(result.rows.map(withStatsigStatus)));
@@ -592,6 +606,11 @@ export async function handleAdmin(
 
   if (placementIdMatch && req.method === "PATCH") {
     const id = placementIdMatch[1];
+    const ownedPlacement = await getPlacementForAuth(id, auth);
+    if (!ownedPlacement) {
+      sendJson(res, 404, { error: "Placement not found. Refresh the dashboard and try again." });
+      return;
+    }
     const raw = await readBody(req);
     const body = JSON.parse(raw);
     const sets: string[] = [];
@@ -639,7 +658,19 @@ export async function handleAdmin(
 
   if (placementIdMatch && req.method === "DELETE") {
     const id = placementIdMatch[1];
-    await query("DELETE FROM placements WHERE id = $1", [id]);
+    const ownedPlacement = await getPlacementForAuth(id, auth);
+    if (!ownedPlacement) {
+      sendJson(res, 404, { error: "Placement not found" });
+      return;
+    }
+    await query(
+      `DELETE FROM placements p
+        USING clients c
+        WHERE p.id = $1
+          AND c.public_key = p.public_key
+          AND ($2::text IS NULL OR c.id = $2)`,
+      [id, auth.kind === "workspace" ? auth.workspaceId : null]
+    );
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ id, status: "deleted" }));
     return;
@@ -655,6 +686,10 @@ export async function handleAdmin(
     if (sdkStack) {
       params.push(sdkStack);
       filters.push(`sdk_stack = $${params.length}`);
+    }
+    if (auth.kind === "workspace") {
+      params.push(auth.workspaceId);
+      filters.push(`id = $${params.length}`);
     }
     const result = await query<{
       id: string;
@@ -684,6 +719,10 @@ export async function handleAdmin(
   }
 
   if (path === "/admin/clients" && req.method === "POST") {
+    if (auth.kind === "workspace") {
+      sendJson(res, 403, { error: "Admin credential required" });
+      return;
+    }
     const raw = await readBody(req);
     const body = JSON.parse(raw);
     const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -744,6 +783,10 @@ export async function handleAdmin(
   const clientSetupMatch = path.match(/^\/admin\/clients\/([^/]+)\/setup$/);
   if (clientSetupMatch && req.method === "GET") {
     const id = clientSetupMatch[1];
+    if (auth.kind === "workspace" && auth.workspaceId !== id) {
+      sendJson(res, 404, { error: "Client not found" });
+      return;
+    }
     const result = await query<{
       id: string; public_key: string; name: string;
       sdk_stack: SdkStack;
@@ -776,6 +819,10 @@ export async function handleAdmin(
 
   if (clientIdMatch && req.method === "PATCH") {
     const id = clientIdMatch[1];
+    if (auth.kind === "workspace" && auth.workspaceId !== id) {
+      sendJson(res, 404, { error: "Client not found" });
+      return;
+    }
     const raw = await readBody(req);
     const body = JSON.parse(raw);
     const sets: string[] = [];
@@ -850,6 +897,10 @@ export async function handleAdmin(
   }
 
   if (clientIdMatch && req.method === "GET") {
+    if (auth.kind === "workspace" && auth.workspaceId !== clientIdMatch[1]) {
+      sendJson(res, 404, { error: "Client not found" });
+      return;
+    }
     const result = await query<{
       id: string; public_key: string; name: string;
       sdk_stack: SdkStack;
@@ -871,6 +922,10 @@ export async function handleAdmin(
   }
 
   if (clientIdMatch && req.method === "DELETE") {
+    if (auth.kind === "workspace") {
+      sendJson(res, 403, { error: "Admin credential required" });
+      return;
+    }
     const id = clientIdMatch[1];
     const existing = await query<{ public_key: string }>(
       "SELECT public_key FROM clients WHERE id = $1",
@@ -978,9 +1033,15 @@ export async function handleAdmin(
   }
 
   if (path === "/admin/events/stats" && req.method === "GET") {
+    const eventParams: unknown[] = [];
+    const eventFilter = auth.kind === "workspace"
+      ? (eventParams.push(auth.publicKey), "WHERE public_key = $1")
+      : "";
     const result = await query<{ event_name: string; count: string }>(
       `SELECT event_name, COUNT(*)::text as count FROM events
-       GROUP BY event_name ORDER BY count DESC LIMIT 20`
+       ${eventFilter}
+       GROUP BY event_name ORDER BY count DESC LIMIT 20`,
+      eventParams
     );
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(result.rows));
@@ -990,6 +1051,12 @@ export async function handleAdmin(
   if (path === "/admin/events/recent" && req.method === "GET") {
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
     const limit = parseLimit(url.searchParams.get("limit"), 50, 200);
+    const eventParams: unknown[] = [];
+    const eventFilter = auth.kind === "workspace"
+      ? (eventParams.push(auth.publicKey), "WHERE public_key = $1")
+      : "";
+    eventParams.push(limit);
+    const limitParam = `$${eventParams.length}`;
     const result = await query<{
       id: string;
       public_key: string;
@@ -1010,9 +1077,10 @@ export async function handleAdmin(
          identity,
          created_at::text
        FROM events
+       ${eventFilter}
        ORDER BY created_at DESC
-       LIMIT $1`,
-      [limit]
+       LIMIT ${limitParam}`,
+      eventParams
     );
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(result.rows));
