@@ -400,6 +400,57 @@ export interface ValidationResult {
 const DOCUMENT_WARN_BYTES = 100_000;
 const DOCUMENT_REJECT_BYTES = 512_000;
 
+type JsonRecord = Record<string, any>;
+
+// `hi-en` was emitted by the legacy HiAstro authoring flow for Latin-script
+// Hindi. Keep V2 authoring strict, but canonicalize that exact historical
+// alias while copying legacy rows into immutable V2 releases.
+export function normalizeLegacyPaywallSpecForV2<T extends JsonRecord>(spec: T): T {
+  const copy = structuredClone(spec);
+  const localization = isJsonRecord(copy.localization) ? copy.localization : null;
+  const translations = isJsonRecord(localization?.translations)
+    ? localization.translations
+    : null;
+  if (!localization || !translations || !("hi-en" in translations)) return copy;
+
+  const legacyHindi = translations["hi-en"];
+  const canonicalHindi = translations["hi-Latn"];
+  if (canonicalHindi !== undefined && stableJsonValue(canonicalHindi) !== stableJsonValue(legacyHindi)) {
+    // Conflicting authored copy needs human resolution. Leave it untouched so
+    // the normal V2 locale validator blocks publication.
+    return copy;
+  }
+
+  if (canonicalHindi === undefined) {
+    translations["hi-Latn"] = structuredClone(legacyHindi);
+  }
+  delete translations["hi-en"];
+  if (localization.defaultLocale === "hi-en") localization.defaultLocale = "hi-Latn";
+
+  const metadata = isJsonRecord(copy.metadata) ? copy.metadata : null;
+  if (metadata?.defaultLocale === "hi-en") metadata.defaultLocale = "hi-Latn";
+
+  const normalizedHindi = translations["hi-Latn"];
+  if (isJsonRecord(normalizedHindi) && normalizedHindi.html_lang === "hi-en") {
+    normalizedHindi.html_lang = "hi-Latn";
+  }
+  return copy;
+}
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function stableJsonValue(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJsonValue).join(",")}]`;
+  if (isJsonRecord(value)) {
+    return `{${Object.keys(value).sort().map(
+      (key) => `${JSON.stringify(key)}:${stableJsonValue(value[key])}`
+    ).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
 function documentBytes(spec: unknown): number {
   const document = (spec as { document?: unknown } | null)?.document;
   if (!document || typeof document !== "object") return 0;
