@@ -415,11 +415,19 @@ The Flutter SDK now lives in the standalone [`tranzmit-flutter-sdk`](https://git
 
 ## Server
 
-Requires Postgres, an admin secret, and optionally Statsig:
+Requires Postgres, separate API and browser admin credentials, and optionally Statsig:
 
 ```bash
-DATABASE_URL=postgresql://... ADMIN_SECRET=... STATSIG_SERVER_SECRET=secret-xxx npm run dev:server
+DATABASE_URL=postgresql://... \
+ADMIN_SECRET=replace-with-a-long-random-api-secret \
+DASHBOARD_PASSWORD=replace-with-a-different-long-random-browser-password \
+STATSIG_SERVER_SECRET=secret-xxx \
+npm run dev:server
 ```
+
+Use `ADMIN_SECRET` as a bearer token or `X-Admin-Secret` header for API automation.
+The browser dashboard uses HTTP Basic auth with `DASHBOARD_PASSWORD`; state-changing
+dashboard requests are accepted only from the API's exact origin.
 
 ### Endpoints
 

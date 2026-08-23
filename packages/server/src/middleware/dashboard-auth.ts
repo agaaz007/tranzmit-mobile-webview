@@ -9,7 +9,9 @@ import crypto from "node:crypto";
  * IMPORTANT: this gate is intentionally NOT applied to the SDK data plane
  * (`/v1/config`, `/v1/events`, `/v1/paywall-documents`, `/assets`, `/health`).
  * Those are called by customer apps with no credentials; gating them would take
- * every live paywall down. The `/admin` API stays on its own `ADMIN_SECRET`.
+ * every live paywall down. The `/admin` API is protected separately: the
+ * `ADMIN_SECRET` and same-origin dashboard Basic auth have global access,
+ * while workspace bearer secrets remain tenant-scoped.
  */
 export function requireDashboardAuth(req: IncomingMessage, res: ServerResponse): boolean {
   const expected = process.env.DASHBOARD_PASSWORD;
