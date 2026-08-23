@@ -60,6 +60,34 @@ export function publicApiBaseUrl(req: IncomingMessage): string {
   return `${normalizedProto}://${normalizedHost}`.replace(/\/$/, "");
 }
 
+/**
+ * Returns the one canonical public origin used when immutable V2 documents are
+ * materialized or compared outside an HTTP request. A guessed origin would
+ * permanently change relative-asset resolution and document hashes, so these
+ * offline operations fail closed when the deployment has not supplied one.
+ */
+export function configuredPublicApiBaseUrl(): string {
+  const raw = process.env.PUBLIC_API_BASE_URL?.trim();
+  if (!raw) {
+    throw new Error("PUBLIC_API_BASE_URL is required for V2 backfill and comparison");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error("PUBLIC_API_BASE_URL must be a valid http(s) origin");
+  }
+  if (!["http:", "https:"].includes(parsed.protocol)
+      || parsed.username
+      || parsed.password
+      || parsed.search
+      || parsed.hash
+      || (parsed.pathname !== "/" && parsed.pathname !== "")) {
+    throw new Error("PUBLIC_API_BASE_URL must be a valid http(s) origin without a path");
+  }
+  return parsed.origin;
+}
+
 export function shouldInlineDocuments(): boolean {
   return process.env.PAYWALL_DOCUMENT_DELIVERY !== "hosted";
 }
@@ -143,6 +171,74 @@ export function webViewDocumentPayload(spec: unknown, context?: WebViewDocumentC
     revision: normalized.revision,
     integrity: document.integrity || sha256Integrity(document.html || ""),
   };
+}
+
+/** Materializes only author-provided document bytes; it never invokes the
+ * legacy block renderer or injects fallback CSS/base URLs. */
+export function exactWebViewDocumentPayload(spec: unknown): WebViewDocumentPayload {
+  const source = cloneRecord(spec);
+  const document = cloneRecord(source.document);
+  const html = typeof document.html === "string" ? document.html : "";
+  const css = typeof document.css === "string" ? document.css : undefined;
+  const js = typeof document.js === "string" ? document.js : undefined;
+  const baseUrl = typeof document.baseUrl === "string" && document.baseUrl.length > 0
+    ? document.baseUrl
+    : undefined;
+  const contentHash = hashDocument({ html, css, js, baseUrl });
+  const revision = `doc-${contentHash.slice(0, 12)}`;
+  const templateId = source.templateId || source.layout || "paywall";
+  return {
+    html,
+    ...(css !== undefined ? { css } : {}),
+    ...(js !== undefined ? { js } : {}),
+    ...(baseUrl ? { baseUrl } : {}),
+    cacheKey: `${templateId}:${revision}`,
+    revision,
+    integrity: sha256Integrity(html),
+  };
+}
+
+/**
+ * Attaches a previously materialized immutable document to a composed V2 spec.
+ * Unlike ensureWebViewSpec, this never derives bytes or baseUrl from the
+ * incoming request, so one content-addressed URL always returns one payload.
+ */
+export function attachImmutableWebViewDocument(
+  spec: unknown,
+  payload: WebViewDocumentPayload,
+  context: WebViewDocumentContext
+): JsonRecord {
+  const next = cloneRecord(spec);
+  const includeInline = context.includeInline ?? true;
+  next.renderer = "webview";
+  next.templateId = next.templateId || next.layout || "paywall";
+  next.dismiss = next.dismiss || { enabled: true, delay_ms: 0 };
+  next.bridge = next.bridge || { version: 1, allowedActions: ["cta", "dismiss", "open_url", "custom_action"] };
+  next.revision = payload.revision;
+  next.cacheKey = payload.cacheKey;
+  next.presentation = normalizePresentation(next.presentation);
+  next.document = {
+    ...(includeInline ? {
+      html: payload.html,
+      ...(payload.css !== undefined ? { css: payload.css } : {}),
+      ...(payload.js !== undefined ? { js: payload.js } : {}),
+      ...(payload.baseUrl ? { baseUrl: payload.baseUrl } : {}),
+    } : {}),
+    url: documentUrl(
+      context.apiBaseUrl,
+      context.publicKey,
+      context.placementId,
+      context.variantKey,
+      payload.cacheKey
+    ),
+    integrity: payload.integrity,
+    cacheTtlSeconds: documentCacheTtlSeconds(),
+  };
+  next.metadata = {
+    ...(next.metadata || {}),
+    documentDelivery: includeInline ? "hosted+inline" : "hosted",
+  };
+  return next;
 }
 
 export function sha256Integrity(content: string): string {

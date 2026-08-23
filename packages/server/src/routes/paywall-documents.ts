@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { getPlacementsForKey, validatePublicKey } from "../db.js";
+import { getConfigClient, getPublishedDocument } from "../config-store.js";
 import { sendJsonCompressed } from "../http-compress.js";
 import { hashDocument, publicApiBaseUrl, webViewDocumentPayload } from "../webview-documents.js";
 
@@ -49,6 +50,22 @@ export async function handlePaywallDocument(
   const placementId = decodeURIComponent(match[1]);
   const variantKey = decodeURIComponent(match[2]);
   const requestedCacheKey = decodeURIComponent(match[3]);
+
+  // V2 document lookup is content-addressed across every release that has ever
+  // been published in this environment. Publishing a newer release therefore
+  // cannot invalidate an URL already cached by an SDK. Candidate-only content
+  // has no publish audit row and remains private.
+  const client = await getConfigClient(publicKey);
+  if (client) {
+    const immutable = await getPublishedDocument(client.id, requestedCacheKey);
+    if (immutable) {
+      sendDocument(req, res, immutable.payload, immutable.documentHash, immutable.cacheKey);
+      return;
+    }
+  }
+
+  // Legacy fallback remains during the strangler window and preserves the
+  // existing URL format and rollback path.
   const rows = await getPlacementsForKey(publicKey);
   const row = rows.find((item) => item.id === placementId);
   if (!row) {
@@ -81,8 +98,17 @@ export async function handlePaywallDocument(
     return;
   }
 
+  sendDocument(req, res, payload, hashDocument(payload), payload.cacheKey);
+}
+
+function sendDocument(
+  req: IncomingMessage,
+  res: ServerResponse,
+  payload: unknown,
+  contentHash: string,
+  cacheKey: string
+): void {
   const body = JSON.stringify(payload);
-  const contentHash = hashDocument(payload);
   // WEAK ETag: gzip changes the representation bytes but not the content, so a
   // strong validator would be wrong per RFC 9110 (nginx weakens ETags the same
   // way when it compresses).
@@ -114,6 +140,6 @@ export async function handlePaywallDocument(
     // covers only html/css/js/baseUrl, but the serialized body also carries
     // cacheKey (templateId-prefixed) — two templates with identical content
     // must not share cached bytes or one would serve the other's cacheKey.
-    { compressionCacheKey: `${payload.cacheKey}:${contentHash}` }
+    { compressionCacheKey: `${cacheKey}:${contentHash}` }
   );
 }

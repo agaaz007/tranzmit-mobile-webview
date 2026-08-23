@@ -19,6 +19,13 @@ const SEED_CLIENT_ID = process.env.SEED_CLIENT_ID || "client_influish_demo";
 const SEED_PUBLIC_KEY = process.env.SEED_PUBLIC_KEY || "pk_test_2a8a5f07d4b9fcf1cc77e024";
 const SEED_SECRET_KEY = process.env.SEED_SECRET_KEY || "";
 const SEED_CLIENT_NAME = process.env.SEED_CLIENT_NAME || "Influish Demo";
+const SEED_PROJECT_KEY = process.env.SEED_PROJECT_KEY
+  || SEED_CLIENT_NAME.toLowerCase()
+    .replace(/\b(production|testing|tesitng|test|demo|live)\b/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+  || SEED_CLIENT_ID.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+const SEED_ENVIRONMENT_KIND = SEED_PUBLIC_KEY.startsWith("pk_live_") ? "live" : "test";
 const SEED_REVISION = process.env.SEED_REVISION || "seed-v13";
 const SEED_ANNUAL_PRICE = Number(process.env.SEED_ANNUAL_PRICE || 999);
 const SEED_ORIGINAL_PRICE = Number(process.env.SEED_ORIGINAL_PRICE || 5988);
@@ -520,9 +527,20 @@ async function upsertSpec(client, workspaceId, key) {
     `INSERT INTO paywall_specs (workspace_id, name, spec, status, created_by)
      VALUES ($1, $2, $3, 'active', 'seed')
      ON CONFLICT (workspace_id, name) DO UPDATE SET
+       version = CASE
+         WHEN paywall_specs.spec IS DISTINCT FROM EXCLUDED.spec
+           OR paywall_specs.status IS DISTINCT FROM EXCLUDED.status
+         THEN paywall_specs.version + 1
+         ELSE paywall_specs.version
+       END,
+       updated_at = CASE
+         WHEN paywall_specs.spec IS DISTINCT FROM EXCLUDED.spec
+           OR paywall_specs.status IS DISTINCT FROM EXCLUDED.status
+         THEN now()
+         ELSE paywall_specs.updated_at
+       END,
        spec = EXCLUDED.spec,
-       status = 'active',
-       updated_at = now()
+       status = 'active'
      RETURNING id, spec`,
     [workspaceId, item.name, JSON.stringify(item.spec)]
   );
@@ -538,10 +556,12 @@ async function upsertPlacement(client, publicKey, trigger, defaultSpecId, defaul
 
   const result = await client.query(
     `INSERT INTO placements (
-       id, public_key, trigger, enabled, status, variant_id, experiment_id,
+       id, public_key, client_id, project_key, trigger, enabled, status, variant_id, experiment_id,
        statsig_experiment_id, default_spec_id, targeting_rules, spec
      )
-     VALUES ($1, $2, $3, true, 'active', 'control', $4, $4, $5, '[]'::jsonb, $6)
+     SELECT $1, c.public_key, c.id, c.project_key, $3, true, 'active', 'control',
+            $4, $4, $5, '[]'::jsonb, $6
+       FROM clients c WHERE c.public_key = $2
      ON CONFLICT (public_key, trigger) DO UPDATE SET
        enabled = true,
        status = 'active',
@@ -590,10 +610,13 @@ async function ensureWorkspace(client) {
   }
 
   const created = await client.query(
-    `INSERT INTO clients (id, public_key, secret_key, name)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO clients (
+       id, public_key, secret_key, name, project_key, environment_kind,
+       management_status, config_source
+     )
+     VALUES ($1,$2,$3,$4,$5,$6,'editable','legacy')
      RETURNING id, public_key`,
-    [SEED_CLIENT_ID, SEED_PUBLIC_KEY, SEED_SECRET_KEY, SEED_CLIENT_NAME],
+    [SEED_CLIENT_ID, SEED_PUBLIC_KEY, SEED_SECRET_KEY, SEED_CLIENT_NAME, SEED_PROJECT_KEY, SEED_ENVIRONMENT_KIND],
   );
   return created.rows[0];
 }

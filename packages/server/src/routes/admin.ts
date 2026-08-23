@@ -9,6 +9,8 @@ import {
   isValidStatsigSecretEnvVar,
 } from "../statsig.js";
 import crypto from "node:crypto";
+import { handleAdminV2 } from "./admin-v2.js";
+import { ConfigError, importLegacyWorkspaceConfig } from "../config-publish.js";
 import { handleUsage } from "./usage.js";
 
 function unauthorized(res: ServerResponse): void {
@@ -64,6 +66,8 @@ export async function handleAdmin(
 ): Promise<void> {
   const auth = await resolveAdminAuth(req);
   if (!auth) { unauthorized(res); return; }
+
+  if (await handleAdminV2(req, res, path, auth)) return;
 
   if (path === "/admin/usage" && req.method === "GET") {
     await handleUsage(req, res, auth);
@@ -280,8 +284,23 @@ export async function handleAdmin(
       sendJson(res, 400, { error: "Missing or invalid workspace" });
       return;
     }
-    const imported = await importWorkspaceConfig(workspace.id, body);
-    sendJson(res, 200, imported);
+    try {
+      const imported = await importLegacyWorkspaceConfig(
+        workspace.id,
+        body,
+        auth.kind === "workspace" ? `workspace:${auth.workspaceId}` : auth.source || "admin-import"
+      );
+      sendJson(res, 200, imported);
+    } catch (error) {
+      if (error instanceof ConfigError) {
+        sendJson(res, error.status, {
+          error: error.message,
+          ...(error.details === undefined ? {} : { details: error.details }),
+        });
+        return;
+      }
+      throw error;
+    }
     return;
   }
 
@@ -367,10 +386,11 @@ export async function handleAdmin(
     const id = generateId("pl");
     const placement = await query<{ id: string }>(
       `INSERT INTO placements (
-         id, public_key, trigger, enabled, status, variant_id, experiment_id,
+         id, public_key, client_id, project_key, trigger, enabled, status, variant_id, experiment_id,
          statsig_experiment_id, default_spec_id, targeting_rules, spec
        )
-       VALUES ($1, $2, $3, true, 'active', $4, $5, $5, $6, $7, $8)
+       SELECT $1, c.public_key, c.id, c.project_key, $3, true, 'active', $4, $5, $5, $6, $7, $8
+         FROM clients c WHERE c.public_key = $2
        ON CONFLICT (public_key, trigger) DO UPDATE SET
          variant_id = EXCLUDED.variant_id,
          experiment_id = EXCLUDED.experiment_id,
@@ -752,10 +772,18 @@ export async function handleAdmin(
     const id = generateId("client");
     const publicKey = generatePublicKey(env);
     const secretKey = generateSecretKey(env);
+    const projectKey = normalizeProjectKey(body.projectKey ?? body.project_key ?? name);
+    if (!projectKey) {
+      sendJson(res, 400, { error: "Invalid project key" });
+      return;
+    }
     await query(
-      `INSERT INTO clients (id, public_key, secret_key, name, sdk_stack, statsig_project_name, statsig_server_secret_env_var)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [id, publicKey, secretKey, name, sdkStack, statsigProjectName, statsigServerSecretEnvVar]
+      `INSERT INTO clients (
+         id, public_key, secret_key, name, project_key, environment_kind,
+         management_status, config_source, sdk_stack,
+         statsig_project_name, statsig_server_secret_env_var
+       ) VALUES ($1,$2,$3,$4,$5,$6,'editable','legacy',$7,$8,$9)`,
+      [id, publicKey, secretKey, name, projectKey, env, sdkStack, statsigProjectName, statsigServerSecretEnvVar]
     );
 
     sendJson(res, 201, {
@@ -769,6 +797,8 @@ export async function handleAdmin(
       }),
       secret_key: secretKey,
       env,
+      project_key: projectKey,
+      environment_kind: env,
       setup: buildClientSetup({
         publicKey,
         secretKey,
@@ -1146,6 +1176,17 @@ function normalizeOptionalText(value: unknown): string | null {
   return trimmed || null;
 }
 
+function normalizeProjectKey(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 96);
+  return normalized || null;
+}
+
 function normalizeSdkStack(value: unknown): SdkStack | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
@@ -1280,9 +1321,11 @@ async function getPlacementForAuth(id: string, auth: AdminAuthContext): Promise<
        p.public_key,
        p.trigger,
        COALESCE(p.status, CASE WHEN p.enabled THEN 'active' ELSE 'paused' END) AS status,
+       p.variant_id,
        p.default_spec_id,
        COALESCE(p.statsig_experiment_id, p.experiment_id) AS statsig_experiment_id,
        p.targeting_rules,
+       p.spec,
        p.created_at,
        p.updated_at
      FROM placements p
@@ -1328,9 +1371,11 @@ async function exportWorkspaceConfig(workspaceId: string): Promise<unknown> {
        p.id,
        p.trigger,
        COALESCE(p.status, CASE WHEN p.enabled THEN 'active' ELSE 'paused' END) AS status,
+       p.variant_id,
        p.default_spec_id,
        COALESCE(p.statsig_experiment_id, p.experiment_id) AS statsig_experiment_id,
        p.targeting_rules,
+       p.spec,
        p.created_at,
        p.updated_at
      FROM placements p
@@ -1345,7 +1390,9 @@ async function exportWorkspaceConfig(workspaceId: string): Promise<unknown> {
        pv.placement_id,
        COALESCE(pv.variant_key, pv.variant_id) AS variant_key,
        pv.spec_id,
+       pv.spec,
        pv.weight,
+       COALESCE(pv.fallback_rank, 0) AS fallback_rank,
        COALESCE(pv.status, CASE WHEN pv.enabled THEN 'active' ELSE 'paused' END) AS status,
        pv.created_at
      FROM placement_variants pv
@@ -1361,116 +1408,6 @@ async function exportWorkspaceConfig(workspaceId: string): Promise<unknown> {
     specs: specs.rows,
     placements: placements.rows,
     variants: variants.rows,
-  };
-}
-
-async function importWorkspaceConfig(workspaceId: string, body: any): Promise<{ specs: number; placements: number; variants: number }> {
-  const workspace = await query<{ public_key: string }>("SELECT public_key FROM clients WHERE id = $1", [workspaceId]);
-  const publicKey = workspace.rows[0]?.public_key;
-  if (!publicKey) return { specs: 0, placements: 0, variants: 0 };
-
-  const specIdMap = new Map<string, string>();
-  const placementIdMap = new Map<string, string>();
-
-  for (const item of Array.isArray(body.specs) ? body.specs : []) {
-    const validation = validatePaywallSpec(item.spec);
-    if (!validation.valid) continue;
-    const result = await query<{ id: string }>(
-      `INSERT INTO paywall_specs (workspace_id, name, spec, status, created_by)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (workspace_id, name) DO UPDATE SET
-         spec = EXCLUDED.spec,
-         status = EXCLUDED.status,
-         updated_at = now()
-       RETURNING id`,
-      [
-        workspaceId,
-        String(item.name || "").trim(),
-        JSON.stringify(item.spec),
-        normalizeSpecStatus(item.status, "draft"),
-        normalizeOptionalText(item.created_by ?? item.createdBy) || "import",
-      ]
-    );
-    if (item.id) specIdMap.set(item.id, result.rows[0].id);
-  }
-
-  // ============================================================================
-  // ⚠️  DO NOT "SIMPLIFY" THIS UPSERT BACK TO UNCONDITIONAL `EXCLUDED.*` WRITES.
-  //
-  // On 2026-06-30 this upsert (then `experiment_id = EXCLUDED.experiment_id`)
-  // WIPED the live Statsig experiment link and silently reverted the Influish
-  // production A/B test to 100% control for six days, because
-  // scripts/push-influish-production.mjs imports placements WITHOUT a
-  // statsig_experiment_id field. An import payload that omits a field must
-  // PRESERVE the existing production value, never overwrite it with NULL.
-  // This mirrors the guard seed.mjs uses in its direct-DB upsertPlacement().
-  // ============================================================================
-  for (const item of Array.isArray(body.placements) ? body.placements : []) {
-    const trigger = normalizeOptionalText(item.trigger);
-    if (!trigger) continue;
-    const defaultSpecId = item.default_spec_id ? specIdMap.get(item.default_spec_id) || item.default_spec_id : null;
-    const defaultSpec = defaultSpecId ? await getSpecForAuth(defaultSpecId, { kind: "admin" }) : null;
-    const result = await query<{ id: string }>(
-      `INSERT INTO placements (id, public_key, trigger, enabled, status, variant_id, experiment_id, statsig_experiment_id, default_spec_id, targeting_rules, spec)
-       VALUES ($1, $2, $3, $4, $5, 'default', $6, $6, $7, $8, $9)
-       ON CONFLICT (public_key, trigger) DO UPDATE SET
-         enabled = EXCLUDED.enabled,
-         status = EXCLUDED.status,
-         experiment_id = COALESCE(EXCLUDED.experiment_id, placements.experiment_id),
-         statsig_experiment_id = COALESCE(EXCLUDED.statsig_experiment_id, placements.statsig_experiment_id),
-         default_spec_id = COALESCE(EXCLUDED.default_spec_id, placements.default_spec_id),
-         targeting_rules = EXCLUDED.targeting_rules,
-         spec = CASE WHEN EXCLUDED.default_spec_id IS NULL THEN placements.spec ELSE EXCLUDED.spec END,
-         updated_at = now()
-       RETURNING id`,
-      [
-        item.id || generateId("pl"),
-        publicKey,
-        trigger,
-        normalizePlacementStatus(item.status) === "active",
-        normalizePlacementStatus(item.status) || "active",
-        normalizeOptionalText(item.statsig_experiment_id),
-        defaultSpecId,
-        JSON.stringify(Array.isArray(item.targeting_rules) ? item.targeting_rules : []),
-        JSON.stringify(defaultSpec?.spec || {}),
-      ]
-    );
-    if (item.id) placementIdMap.set(item.id, result.rows[0].id);
-  }
-
-  for (const item of Array.isArray(body.variants) ? body.variants : []) {
-    const placementId = placementIdMap.get(item.placement_id) || item.placement_id;
-    const specId = specIdMap.get(item.spec_id) || item.spec_id;
-    const variantKey = normalizeOptionalText(item.variant_key);
-    if (!placementId || !specId || !variantKey) continue;
-    const spec = await getSpecForAuth(specId, { kind: "admin" });
-    if (!spec) continue;
-    await query(
-      `INSERT INTO placement_variants (placement_id, variant_id, variant_key, spec_id, spec, enabled, status, weight)
-       VALUES ($1, $2, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (placement_id, variant_id) DO UPDATE SET
-         variant_key = EXCLUDED.variant_key,
-         spec_id = EXCLUDED.spec_id,
-         spec = EXCLUDED.spec,
-         enabled = EXCLUDED.enabled,
-         status = EXCLUDED.status,
-         weight = EXCLUDED.weight`,
-      [
-        placementId,
-        variantKey,
-        specId,
-        JSON.stringify(spec.spec),
-        normalizeVariantStatus(item.status) !== "paused",
-        normalizeVariantStatus(item.status) || "active",
-        Number.isFinite(Number(item.weight)) ? Number(item.weight) : 50,
-      ]
-    );
-  }
-
-  return {
-    specs: specIdMap.size,
-    placements: placementIdMap.size,
-    variants: Array.isArray(body.variants) ? body.variants.length : 0,
   };
 }
 

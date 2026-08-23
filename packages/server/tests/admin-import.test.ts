@@ -26,6 +26,36 @@ vi.mock("../src/db.js", () => ({
     }
     return { rows: [] };
   }),
+  pool: {
+    connect: vi.fn(async () => ({
+      query: vi.fn(async (sql: string, params?: unknown[]) => {
+        queryCalls.push({ sql, params: params ?? [] });
+        if (/SELECT id, public_key, management_status, config_source/i.test(sql)) {
+          return {
+            rows: [{
+              id: "ws_1",
+              public_key: "pk_test_valid",
+              management_status: "editable",
+              config_source: "legacy",
+            }],
+          };
+        }
+        if (/SELECT trigger,[\s\S]*FROM placements/i.test(sql)) {
+          return {
+            rows: ((params?.[1] as string[] | undefined) || []).map((trigger) => ({
+              trigger,
+              status: "active",
+              default_spec_id: "existing-spec",
+              has_inline_spec: true,
+            })),
+          };
+        }
+        if (/INSERT INTO placements/i.test(sql)) return { rows: [{ id: "pl_test" }] };
+        return { rows: [] };
+      }),
+      release: vi.fn(),
+    })),
+  },
   getWorkspaceForPublicKey: vi.fn(async () => ({
     id: "ws_1",
     public_key: "pk_test_valid",
@@ -93,12 +123,12 @@ describe("POST /admin/config/import placement upsert", () => {
     expect(upsert).toBeDefined();
     // The ON CONFLICT clause must fall back to the row's current value, not
     // overwrite it with the payload's NULL.
-    expect(upsert!.sql).toMatch(/experiment_id\s*=\s*COALESCE\(EXCLUDED\.experiment_id,\s*placements\.experiment_id\)/);
+    expect(upsert!.sql).toMatch(/experiment_id\s*=\s*CASE WHEN \$9 THEN EXCLUDED\.experiment_id ELSE placements\.experiment_id END/);
     expect(upsert!.sql).toMatch(
-      /statsig_experiment_id\s*=\s*COALESCE\(EXCLUDED\.statsig_experiment_id,\s*placements\.statsig_experiment_id\)/
+      /statsig_experiment_id\s*=\s*CASE WHEN \$9 THEN EXCLUDED\.statsig_experiment_id ELSE placements\.statsig_experiment_id END/
     );
-    // And the payload really did omit it, so the bound param is null.
-    expect(upsert!.params[5]).toBeNull();
+    expect(upsert!.params[7]).toBeNull();
+    expect(upsert!.params[8]).toBe(false);
   });
 
   it("passes an explicit statsig_experiment_id through to the upsert", async () => {
@@ -117,7 +147,8 @@ describe("POST /admin/config/import placement upsert", () => {
 
     const upsert = placementUpsert();
     expect(upsert).toBeDefined();
-    expect(upsert!.params[5]).toBe("influish_production_mobile_prod");
+    expect(upsert!.params[7]).toBe("influish_production_mobile_prod");
+    expect(upsert!.params[8]).toBe(true);
   });
 
   it("does not blank the stored spec/default_spec_id when the payload has no default_spec_id", async () => {
@@ -128,7 +159,30 @@ describe("POST /admin/config/import placement upsert", () => {
 
     const upsert = placementUpsert();
     expect(upsert).toBeDefined();
-    expect(upsert!.sql).toMatch(/default_spec_id\s*=\s*COALESCE\(EXCLUDED\.default_spec_id,\s*placements\.default_spec_id\)/);
-    expect(upsert!.sql).toMatch(/CASE WHEN EXCLUDED\.default_spec_id IS NULL THEN placements\.spec/);
+    expect(upsert!.sql).toMatch(/default_spec_id\s*=\s*CASE WHEN \$11 THEN EXCLUDED\.default_spec_id ELSE placements\.default_spec_id END/);
+    expect(upsert!.sql).toMatch(/ELSE placements\.spec/);
+    expect(upsert!.params[10]).toBe(false);
+  });
+
+  it("distinguishes explicit null from omission for restore fields", async () => {
+    await makeAdminRequest("/admin/config/import", "POST", {
+      publicKey: "pk_test_valid",
+      placements: [{
+        trigger: "upgrade_pro",
+        status: "paused",
+        statsig_experiment_id: null,
+        default_spec_id: null,
+        spec: null,
+      }],
+    });
+
+    const upsert = placementUpsert();
+    expect(upsert).toBeDefined();
+    expect(upsert!.params[7]).toBeNull();
+    expect(upsert!.params[8]).toBe(true);
+    expect(upsert!.params[9]).toBeNull();
+    expect(upsert!.params[10]).toBe(true);
+    expect(upsert!.params[13]).toBeNull();
+    expect(upsert!.params[14]).toBe(true);
   });
 });
