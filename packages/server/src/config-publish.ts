@@ -1570,12 +1570,27 @@ function cloneRecord(value: unknown): JsonRecord {
 
 function extractLiteralProductIds(html: string): string[] {
   const ids = new Set<string>();
-  const attribute = /\sdata-product-id\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
-  for (const match of html.matchAll(attribute)) {
-    const value = (match[1] || match[2] || match[3] || "").trim();
+  const openingTag = /<[A-Za-z][^<>]*>/g;
+  for (const match of html.matchAll(openingTag)) {
+    // Some legacy documents contain runtime-inserted markup inside JS strings,
+    // so accept escaped quote wrappers while still requiring action and product
+    // attributes to be co-located on the same CTA tag.
+    const tag = match[0].replace(/\\(["'])/g, "$1");
+    if (extractTagAttribute(tag, "data-tranzmit-action")?.toLowerCase() !== "cta") continue;
+    const value = (extractTagAttribute(tag, "data-product-id") || "").trim();
     if (value && !value.includes("{{")) ids.add(value);
   }
   return Array.from(ids).sort();
+}
+
+function extractTagAttribute(tag: string, name: string): string | null {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const attribute = new RegExp(
+    `\\s${escapedName}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
+    "i"
+  );
+  const match = tag.match(attribute);
+  return match ? (match[1] ?? match[2] ?? match[3] ?? "") : null;
 }
 
 function isRecord(value: unknown): value is JsonRecord {

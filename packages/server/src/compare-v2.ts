@@ -10,6 +10,7 @@ import {
   webViewDocumentPayload,
 } from "./webview-documents.js";
 import { pool } from "./db.js";
+import { normalizeLegacyPaywallSpecForV2 } from "./paywall-schema.js";
 
 type JsonRecord = Record<string, any>;
 
@@ -356,7 +357,7 @@ function splitPaywallSpec(spec: unknown): {
 }
 
 function ensureBackfillBaseUrl(spec: JsonRecord): JsonRecord {
-  const copy = structuredClone(spec);
+  const copy = normalizeLegacyPaywallSpecForV2(spec);
   const document = copy.document;
   if (isRecord(document) && typeof document.html === "string" && !document.baseUrl) {
     document.baseUrl = publicApiBaseUrl();

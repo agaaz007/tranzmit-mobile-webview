@@ -14,6 +14,7 @@ import {
   __private as publishPrivate,
 } from "./config-publish.js";
 import { pool } from "./db.js";
+import { normalizeLegacyPaywallSpecForV2 } from "./paywall-schema.js";
 import { configuredPublicApiBaseUrl } from "./webview-documents.js";
 
 type JsonRecord = Record<string, any>;
@@ -35,6 +36,13 @@ const CLIENT_MANIFEST = new Map<string, {
   ["pk_live_a1323f76d397778b6ed5eb04", {
     projectKey: "influish", environmentKind: "live", managementStatus: "legacy_locked",
   }],
+]);
+
+// Explicitly preserve the one proven legacy identity that cannot share the
+// canonical key: this default-only paywall differs from Response_general-01,
+// which is the upgrade_pro/general-01 variant in the same live environment.
+const LEGACY_PAYWALL_KEY_OVERRIDES = new Map<string, string>([
+  ["86bfd043-243e-4331-814e-e0a2722cbb32", "general-default"],
 ]);
 
 interface ClientRow {
@@ -89,8 +97,17 @@ interface MigratedSpec {
   bindingId: string;
   paywallId: string;
   releaseId: string;
+  payloadHash: string;
   valid: boolean;
   legacyStatus: "draft" | "active" | "archived";
+}
+
+interface PointerChoice {
+  releaseId: string;
+  paywallId: string;
+  payloadHash: string;
+  priority: number;
+  source: string;
 }
 
 export async function backfillPaywallPublishingV2(): Promise<Record<string, unknown>> {
@@ -149,24 +166,28 @@ export async function backfillPaywallPublishingV2(): Promise<Record<string, unkn
         bindingId,
         paywallId: paywall.id,
         releaseId: String(release.id),
+        payloadHash: sha256(stableJson(splitPaywallSpec(preparedSpec))),
         valid,
         legacyStatus: spec.status,
       });
     }
 
-    const pointerChoices = new Map<string, { releaseId: string; paywallId: string; priority: number; source: string }>();
+    const pointerChoices = new Map<string, PointerChoice>();
     for (const [specId, priority] of referenced) {
       const item = migrated.get(specId);
-      if (!item || !item.valid || item.legacyStatus !== "active") continue;
+      if (!item || !item.valid || !isLegacySpecServable(item.legacyStatus)) continue;
       const current = pointerChoices.get(item.bindingId);
-      if (!current || priority > current.priority) {
-        pointerChoices.set(item.bindingId, {
-          releaseId: item.releaseId,
-          paywallId: item.paywallId,
-          priority,
-          source: specId,
-        });
-      } else if (current.releaseId !== item.releaseId && priority === current.priority) {
+      const candidate: PointerChoice = {
+        releaseId: item.releaseId,
+        paywallId: item.paywallId,
+        payloadHash: item.payloadHash,
+        priority,
+        source: specId,
+      };
+      const selected = preferPointerChoice(current, candidate);
+      if (selected === candidate) {
+        pointerChoices.set(item.bindingId, candidate);
+      } else if (current && current.releaseId !== item.releaseId && priority === current.priority) {
         await insertMigrationAudit(db, clients.get(specById.get(specId)!.workspace_id)!, "binding_conflict", {
           binding_id: item.bindingId,
           kept_legacy_spec_id: current.source,
@@ -318,7 +339,7 @@ export async function backfillPaywallPublishingV2(): Promise<Record<string, unkn
       }> = [];
       for (const variant of legacyVariants) {
         const legacySpec = variant.spec_id ? specById.get(variant.spec_id) : undefined;
-        if (legacySpec && legacySpec.status !== "active") continue;
+        if (legacySpec && !isLegacySpecServable(legacySpec.status)) continue;
         const mapping = variant.spec_id
           ? migrated.get(variant.spec_id)
           : await migrateInlineSpec(
@@ -758,7 +779,14 @@ async function migrateInlineSpec(
       ]
     );
   }
-  return { bindingId, paywallId: paywall.id, releaseId, valid, legacyStatus: "active" };
+  return {
+    bindingId,
+    paywallId: paywall.id,
+    releaseId,
+    payloadHash: sha256(stableJson(splitPaywallSpec(prepared))),
+    valid,
+    legacyStatus: "active",
+  };
 }
 
 function legacyProvenance(spec: LegacySpecRow) {
@@ -799,6 +827,8 @@ function buildLegacyProvenance(input: {
 }
 
 function logicalPaywallKey(projectKey: string, spec: LegacySpecRow): string {
+  const override = LEGACY_PAYWALL_KEY_OVERRIDES.get(spec.id);
+  if (override) return override;
   if (spec.status === "archived" && /probe/i.test(spec.name)) return `legacy-${spec.id}`;
   if (projectKey === "hiastro") {
     const normalized = spec.name
@@ -826,7 +856,7 @@ function logicalPaywallKey(projectKey: string, spec: LegacySpecRow): string {
 }
 
 function withBackfillBaseUrl(spec: JsonRecord): JsonRecord {
-  const copy = structuredClone(spec);
+  const copy = normalizeLegacyPaywallSpecForV2(spec);
   const document = copy.document;
   if (!document || typeof document !== "object" || typeof document.html !== "string") return copy;
   // The legacy resolver always supplied the API origin as baseUrl. Persist it
@@ -835,6 +865,27 @@ function withBackfillBaseUrl(spec: JsonRecord): JsonRecord {
     document.baseUrl = configuredPublicApiBaseUrl();
   }
   return copy;
+}
+
+function isLegacySpecServable(status: string): boolean {
+  return status !== "archived";
+}
+
+function preferPointerChoice(
+  current: PointerChoice | undefined,
+  candidate: PointerChoice
+): PointerChoice {
+  if (!current || candidate.priority > current.priority) return candidate;
+  if (
+    candidate.priority === current.priority
+    && candidate.releaseId !== current.releaseId
+    && candidate.payloadHash !== current.payloadHash
+  ) {
+    throw new Error(
+      `Ambiguous legacy paywall binding: ${current.source} and ${candidate.source} have equal priority but different payloads`
+    );
+  }
+  return current;
 }
 
 async function recordInlineMismatches(db: DbExecutor, clients: Map<string, ClientRow>) {
@@ -943,4 +994,6 @@ export const __private = {
   logicalPaywallKey,
   referencedSpecPriority,
   withBackfillBaseUrl,
+  isLegacySpecServable,
+  preferPointerChoice,
 };
