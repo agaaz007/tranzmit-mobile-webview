@@ -1,9 +1,0 @@
-{
-  "sdkVersion": "0.5.0",
-  "source": "checkout",
-  "generatedBy": "scripts/vendor-preview-harness.mjs",
-  "files": {
-    "responsive.mjs": "d9c6ccb27438abd98f0cb1c6ef1950045c07350b84e7f4948cf2d965934bbc77",
-    "compose.bundle.js": "ed5c14281d0d675516b9f155f45b42dbd9d15e7b454b519847c1c44d881ca046"
-  }
-}

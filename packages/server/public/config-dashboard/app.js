@@ -14,11 +14,6 @@
     placementHistory: null,
     selectedRevisionId: null,
     dialogAction: null,
-    importEntries: [],
-    importBuilt: null,
-    validation: null,
-    requiredWidths: [],
-    harness: null,
   };
 
   var ids = [
@@ -35,11 +30,6 @@
     "statsigExperimentId", "targetingRulesJson", "variantsJson", "placementRevisions",
     "confirmationDialog", "confirmationForm", "dialogTitle", "dialogSubtitle",
     "diffOutput", "confirmationPhrase", "confirmationText", "confirmActionButton", "toast",
-    "submitButton", "publishButton", "chooseFolderButton", "chooseFilesButton",
-    "clearImportButton", "importDropzone", "folderInput", "filesInput",
-    "importSummary", "importOptions", "importEntry", "importFlatten",
-    "validationPanel", "validationSummary", "validationBadge", "validationChecks", "harnessNote",
-    "probeFrame", "renderStage", "renderStageLabel",
   ];
   var el = {};
   ids.forEach(function (id) { el[id] = document.getElementById(id); });
@@ -316,7 +306,6 @@
   }
 
   async function selectPaywall(bindingId, preferredReleaseId) {
-    if (bindingId !== state.selectedPaywallId) resetImport();
     state.selectedPaywallId = bindingId;
     state.paywallDetail = null;
     renderSection();
@@ -379,9 +368,6 @@
     updatePreviewLocales();
     renderPreview();
     renderPaywallHistory();
-    updatePublishButton();
-    if (release.preflight_report) renderValidation(release.preflight_report, release.id);
-    else if (!state.validation || state.validation.releaseId !== release.id) show(el.validationPanel, false);
   }
 
   function clearPaywallEditor() {
@@ -527,303 +513,6 @@
     if (result) await selectPaywall(state.selectedPaywallId, result.id);
   }
 
-  // --- Import, validate, publish -------------------------------------------
-
-  /**
-   * The device matrix comes from the vendored harness; the server only says
-   * which widths a publish is gated on. Loading both up front means the import
-   * panel can state what Submit will actually do before anyone presses it.
-   */
-  async function loadHarnessInfo() {
-    try {
-      var response = await request("/admin/v2/preflight/viewports");
-      state.requiredWidths = (response && response.requiredWidths) || [];
-    } catch (_error) {
-      state.requiredWidths = [];
-    }
-    try {
-      state.harness = await window.TranzmitImport.harnessInfo();
-    } catch (error) {
-      state.harness = null;
-      showNotice(
-        "The rendering harness failed to load, so Submit cannot measure device renders: " + formatError(error),
-        "error",
-        true
-      );
-    }
-    renderHarnessNote();
-  }
-
-  function renderHarnessNote() {
-    if (!el.harnessNote) return;
-    if (!state.harness) {
-      el.harnessNote.textContent = "Rendering harness unavailable.";
-      return;
-    }
-    var phones = state.harness.devices.filter(function (device) { return device.width <= 430; }).length;
-    el.harnessNote.textContent = "Composed through SDK " + state.harness.sdkVersion + " and audited on "
-      + phones + " phone sizes plus iPad, in every configured locale.";
-  }
-
-  function resetImport() {
-    state.importEntries = [];
-    state.importBuilt = null;
-    state.validation = null;
-    el.folderInput.value = "";
-    el.filesInput.value = "";
-    clear(el.importSummary);
-    show(el.importSummary, false);
-    show(el.importOptions, false);
-    show(el.validationPanel, false);
-  }
-
-  async function stageFiles(entries) {
-    var usable = entries.filter(function (entry) { return !/(^|\/)\.|(^|\/)__MACOSX\//.test(entry.path); });
-    if (!usable.length) {
-      showNotice("No usable files were found in that drop.", "error", true);
-      return;
-    }
-    var documents = window.TranzmitImport.htmlCandidates(usable);
-    if (!documents.length) {
-      showNotice("That folder has no .html file. Drop the exported paywall folder, including its index.html.", "error", true);
-      return;
-    }
-
-    state.importEntries = usable;
-    state.importBuilt = null;
-    state.validation = null;
-    show(el.validationPanel, false);
-
-    clear(el.importEntry);
-    documents.forEach(function (path) {
-      var option = document.createElement("option");
-      option.value = path;
-      option.textContent = path;
-      el.importEntry.appendChild(option);
-    });
-    el.importEntry.value = documents[0];
-    show(el.importOptions, true);
-    await syncFlattenDefault();
-    renderImportSummary();
-  }
-
-  /**
-   * Only legacy skeletons need the flatten layer baked in, so the default is
-   * derived from the document itself rather than left to the operator to guess.
-   */
-  async function syncFlattenDefault() {
-    var entry = state.importEntries.find(function (item) { return item.path === el.importEntry.value; });
-    if (!entry) return;
-    try {
-      el.importFlatten.checked = window.TranzmitImport.looksLegacy(await window.TranzmitImport.readText(entry.file));
-    } catch (_error) {
-      el.importFlatten.checked = false;
-    }
-  }
-
-  function renderImportSummary(built) {
-    clear(el.importSummary);
-    show(el.importSummary, true);
-
-    var head = document.createElement("div");
-    head.className = "import-summary-head";
-    head.appendChild(text("strong", (built ? built.entryPath : el.importEntry.value) || "No document"));
-    head.appendChild(text("span", state.importEntries.length + " file" + (state.importEntries.length === 1 ? "" : "s") + " staged", "muted"));
-    el.importSummary.appendChild(head);
-
-    if (!built) {
-      el.importSummary.appendChild(text("p", "Press Submit to build the document, check it, and save it as a candidate.", "muted"));
-      return;
-    }
-
-    var before = built.assets.reduce(function (total, asset) { return total + asset.before; }, 0);
-    var after = built.assets.reduce(function (total, asset) { return total + asset.after; }, 0);
-    var lines = [
-      built.assets.length + " asset" + (built.assets.length === 1 ? "" : "s") + " inlined, " +
-        formatBytes(before) + " to " + formatBytes(after),
-      "Document " + formatBytes(built.bytes) + ", integrity " + built.integrity.slice(0, 24) + "...",
-    ];
-    if (built.bakedFlatten) lines.push("Full-bleed flatten layer baked in.");
-    if (built.bakedBridge) lines.push('CTA tagged with data-tranzmit-action="cta".');
-    if (built.localizationSource) lines.push("Localization read from " + built.localizationSource + ".");
-    if (built.products) lines.push("Products read from products.json.");
-    if (built.missingAssets.length) {
-      lines.push("Missing from the drop: " + built.missingAssets.join(", "));
-    }
-
-    var list = document.createElement("ul");
-    list.className = "import-facts";
-    lines.forEach(function (line) { list.appendChild(text("li", line)); });
-    el.importSummary.appendChild(list);
-  }
-
-  function formatBytes(bytes) {
-    if (!bytes) return "0 B";
-    if (bytes < 1024) return bytes + " B";
-    return (bytes / 1024).toFixed(bytes >= 102400 ? 0 : 1) + " KB";
-  }
-
-  /**
-   * The spec that Submit validates: the current editor state, with the built
-   * document layered on top when files are staged. The editor is updated to
-   * match so what is reviewed is exactly what is saved.
-   */
-  async function composeSubmissionSpec() {
-    var spec = composeEditorSpec();
-    if (!state.importEntries.length) return spec;
-
-    var built = await window.TranzmitImport.buildBundle(state.importEntries, {
-      entryPath: el.importEntry.value,
-      flatten: el.importFlatten.checked,
-    });
-    state.importBuilt = built;
-    renderImportSummary(built);
-
-    spec.document = { html: built.html, integrity: built.integrity };
-    if (built.localization) spec.localization = built.localization;
-    if (built.products) spec.products = built.products;
-
-    el.documentHtml.value = built.html;
-    el.documentCss.value = "";
-    el.documentJs.value = "";
-    el.documentBaseUrl.value = "";
-    if (built.localization) el.localizationJson.value = pretty(built.localization);
-    if (built.products) el.productsJson.value = pretty(built.products);
-    updatePreviewLocales();
-    renderPreview();
-    return spec;
-  }
-
-  async function submitCandidate() {
-    if (!state.selectedPaywallId) {
-      showNotice("Select a paywall first.", "error", true);
-      return;
-    }
-    var spec;
-    setButtonBusy(el.submitButton, true, "Building...");
-    try {
-      spec = await composeSubmissionSpec();
-    } catch (error) {
-      setButtonBusy(el.submitButton, false);
-      applyReadOnlyState();
-      showNotice(formatError(error), "error", true);
-      return;
-    }
-
-    var base = "/admin/paywalls/" + encodeURIComponent(state.selectedPaywallId);
-    try {
-      // Composed through the SDK's real renderDocument() at every locale and
-      // device, then audited in-frame by the shared harness. The stage has to
-      // stay visible while this runs: a throttled frame never paints, and a
-      // render that never paints cannot be measured.
-      show(el.renderStage, true);
-      var probes = await window.TranzmitImport.auditSpec(
-        spec,
-        el.probeFrame,
-        function (step, index, total) {
-          var where = (step.entry.locale || "default") + " · " + step.device.label;
-          el.renderStageLabel.textContent = (index + 1) + "/" + total + " · " + where;
-          el.submitButton.textContent = "Rendering " + (index + 1) + "/" + total + "...";
-        }
-      );
-      show(el.renderStage, false);
-
-      el.submitButton.textContent = "Checking...";
-      var report = await request(base + "/validate", {
-        method: "POST",
-        body: { spec: spec, viewports: probes },
-      });
-      renderValidation(report, null);
-      if (report.status === "fail") {
-        showNotice("This paywall cannot be published yet. Fix the failed checks and submit again.", "error", true);
-        return;
-      }
-
-      el.submitButton.textContent = "Saving candidate...";
-      var release = await request(base + "/releases", { method: "POST", body: { spec: spec } });
-      var recorded = await request(
-        base + "/releases/" + encodeURIComponent(release.id) + "/preflight",
-        { method: "POST", body: { viewports: probes } }
-      );
-      renderValidation(recorded, release.id);
-      await selectPaywall(state.selectedPaywallId, release.id);
-      showToast(recorded.status === "warn"
-        ? "Candidate saved with warnings. Review them, then publish."
-        : "Candidate saved and validated. Publish when ready.");
-    } catch (error) {
-      showNotice(formatError(error), "error", true);
-    } finally {
-      show(el.renderStage, false);
-      setButtonBusy(el.submitButton, false);
-      applyReadOnlyState();
-    }
-  }
-
-  function renderValidation(report, releaseId) {
-    state.validation = report ? { report: report, releaseId: releaseId || null } : null;
-    show(el.validationPanel, Boolean(report));
-    if (!report) return;
-
-    var checks = report.checks || [];
-    var failed = checks.filter(function (check) { return check.status === "fail"; }).length;
-    var warned = checks.filter(function (check) { return check.status === "warn"; }).length;
-    el.validationBadge.textContent = report.status;
-    el.validationBadge.className = "status-tag status-" + report.status;
-    el.validationSummary.textContent = report.status === "fail"
-      ? failed + " check" + (failed === 1 ? "" : "s") + " failed. Nothing has been published."
-      : warned
-        ? "All checks passed, with " + warned + " warning" + (warned === 1 ? "" : "s") + "."
-        : "All " + checks.length + " checks passed.";
-
-    clear(el.validationChecks);
-    checks.forEach(function (check) {
-      var row = document.createElement("div");
-      row.className = "check-row check-" + check.status;
-      var head = document.createElement("div");
-      head.className = "check-head";
-      head.appendChild(text("span", check.status, "status-tag status-" + check.status));
-      head.appendChild(text("strong", check.title));
-      row.appendChild(head);
-      row.appendChild(text("p", check.detail, "check-detail"));
-      if (check.items && check.items.length) {
-        var list = document.createElement("ul");
-        list.className = "check-items";
-        check.items.forEach(function (item) { list.appendChild(text("li", item)); });
-        row.appendChild(list);
-      }
-      el.validationChecks.appendChild(row);
-    });
-  }
-
-  function selectedRelease() {
-    var releases = (state.paywallDetail && state.paywallDetail.releases) || [];
-    return releases.find(function (release) { return release.id === state.selectedReleaseId; }) || null;
-  }
-
-  /**
-   * Publish is only offered for a release that has a recorded passing check for
-   * its exact bytes and products. The server enforces the same rule, so a stale
-   * tab cannot publish an unvalidated release.
-   */
-  function updatePublishButton() {
-    var release = selectedRelease();
-    var reason = "";
-    if (!release) reason = "Select a release first.";
-    else if (release.is_current) reason = "This release is already published.";
-    else if (environmentLocked()) reason = "This environment is read-only.";
-    else if (!release.preflight_status) reason = "Submit this release for validation before publishing.";
-    else if (release.preflight_status === "fail") reason = "Validation failed for these bytes.";
-
-    el.publishButton.disabled = Boolean(reason);
-    el.publishButton.title = reason || "Publish this release to every user in this environment.";
-  }
-
-  function publishSelectedRelease() {
-    var release = selectedRelease();
-    if (!release || el.publishButton.disabled) return;
-    reviewPaywallPointer(release, "publish");
-  }
-
   function renderPaywallHistory() {
     clear(el.paywallReleases);
     var detail = state.paywallDetail;
@@ -842,11 +531,6 @@
       titleLine.appendChild(text("strong", "Release " + release.release_number));
       if (release.is_current) titleLine.appendChild(text("span", "Published", "history-tag current"));
       else titleLine.appendChild(text("span", "Candidate", "history-tag candidate"));
-      titleLine.appendChild(text(
-        "span",
-        release.preflight_status ? "Checks " + release.preflight_status : "Not checked",
-        "status-tag status-" + (release.preflight_status || "unchecked")
-      ));
       main.appendChild(titleLine);
       main.appendChild(text("small", shortHash(release.content_hash) + " / " + (release.created_by || "unknown")));
       row.appendChild(main);
@@ -858,22 +542,12 @@
       }, false));
       if (!release.is_current) {
         var older = current && Number(release.release_number) < Number(current.release_number);
-        // Rollback targets already served real traffic, so it stays available
-        // even without a fresh verdict — that is the fastest way out of a bad
-        // publish. Forward publishes require a passing check.
-        var blocked = !older && (!release.preflight_status || release.preflight_status === "fail");
-        var action = button(
+        actions.appendChild(button(
           older ? "Review rollback" : "Review publish",
           older ? "button button-secondary button-small" : "button button-primary button-small",
           function () { reviewPaywallPointer(release, older ? "rollback" : "publish"); },
-          environmentLocked() || blocked
-        );
-        if (blocked) {
-          action.title = release.preflight_status === "fail"
-            ? "Validation failed for these bytes. Fix the paywall and submit again."
-            : "Load this release and press Submit to validate it before publishing.";
-        }
-        actions.appendChild(action);
+          environmentLocked()
+        ));
       }
       row.appendChild(actions);
       el.paywallReleases.appendChild(row);
@@ -921,13 +595,6 @@
   function buildPaywallReview(diff, release) {
     var content = release.content || {};
     return {
-      validation: {
-        status: release.preflight_status || "not checked",
-        checked_at: release.preflight_checked_at || null,
-        failed_checks: ((release.preflight_report && release.preflight_report.checks) || [])
-          .filter(function (check) { return check.status !== "pass"; })
-          .map(function (check) { return check.status + ": " + check.title + " - " + check.detail; }),
-      },
       pointer_diff: diff,
       exact_candidate_document: content.document || null,
       candidate_document_hash: release.document_hash || (diff.candidate && diff.candidate.document_hash) || null,
@@ -1226,14 +893,9 @@
 
   function applyReadOnlyState() {
     var locked = environmentLocked();
-    [el.savePaywallButton, el.savePlacementButton, el.promoteButton, el.submitButton].forEach(function (node) {
+    [el.savePaywallButton, el.savePlacementButton, el.promoteButton].forEach(function (node) {
       if (node) node.disabled = locked;
     });
-    [el.chooseFolderButton, el.chooseFilesButton, el.clearImportButton].forEach(function (node) {
-      if (node) node.disabled = locked;
-    });
-    el.importDropzone.classList.toggle("is-disabled", locked);
-    updatePublishButton();
     var editorIds = [
       "documentHtml", "documentCss", "documentJs", "documentBaseUrl", "localizationJson",
       "productsJson", "checkoutJson", "contentJson", "routingStatus", "defaultBinding",
@@ -1287,59 +949,7 @@
   el.previewLocale.addEventListener("change", renderPreview);
   el.localizationJson.addEventListener("change", updatePreviewLocales);
   el.savePaywallButton.addEventListener("click", savePaywallCandidate);
-  el.submitButton.addEventListener("click", submitCandidate);
-  el.publishButton.addEventListener("click", publishSelectedRelease);
   el.promoteButton.addEventListener("click", promoteToLive);
-
-  el.chooseFolderButton.addEventListener("click", function () { el.folderInput.click(); });
-  el.chooseFilesButton.addEventListener("click", function () { el.filesInput.click(); });
-  el.clearImportButton.addEventListener("click", function () {
-    resetImport();
-    showToast("Staged files cleared.");
-  });
-  el.folderInput.addEventListener("change", function () {
-    stageFiles(window.TranzmitImport.filesFromInput(el.folderInput.files));
-  });
-  el.filesInput.addEventListener("change", function () {
-    stageFiles(window.TranzmitImport.filesFromInput(el.filesInput.files));
-  });
-  el.importEntry.addEventListener("change", async function () {
-    await syncFlattenDefault();
-    state.importBuilt = null;
-    renderImportSummary();
-  });
-
-  ["dragenter", "dragover"].forEach(function (name) {
-    el.importDropzone.addEventListener(name, function (event) {
-      event.preventDefault();
-      if (environmentLocked()) return;
-      el.importDropzone.classList.add("is-active");
-    });
-  });
-  ["dragleave", "dragend"].forEach(function (name) {
-    el.importDropzone.addEventListener(name, function () {
-      el.importDropzone.classList.remove("is-active");
-    });
-  });
-  el.importDropzone.addEventListener("drop", async function (event) {
-    event.preventDefault();
-    el.importDropzone.classList.remove("is-active");
-    if (environmentLocked()) return;
-    try {
-      await stageFiles(await window.TranzmitImport.filesFromDataTransfer(event.dataTransfer));
-    } catch (error) {
-      showNotice(formatError(error), "error", true);
-    }
-  });
-  el.importDropzone.addEventListener("click", function () {
-    if (!environmentLocked()) el.folderInput.click();
-  });
-  el.importDropzone.addEventListener("keydown", function (event) {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      el.importDropzone.click();
-    }
-  });
   el.savePlacementButton.addEventListener("click", savePlacementCandidate);
   el.confirmationText.addEventListener("input", function () {
     el.confirmActionButton.disabled = !state.dialogAction || el.confirmationText.value !== state.dialogAction.phrase;
@@ -1353,5 +963,5 @@
     }
   });
 
-  loadHarnessInfo().then(loadEnvironments);
+  loadEnvironments();
 })();

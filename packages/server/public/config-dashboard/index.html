@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tranzmit publishing</title>
   <link rel="stylesheet" href="/config-dashboard/styles.css">
-  <script src="/config-dashboard/import.js" defer></script>
   <script src="/config-dashboard/app.js" defer></script>
 </head>
 <body>
@@ -82,58 +81,9 @@
             </div>
             <div class="header-actions">
               <button id="promoteButton" class="button button-secondary" type="button">Create live candidate</button>
-              <button id="savePaywallButton" class="button button-secondary" type="button">Save candidate</button>
-              <button id="submitButton" class="button button-primary" type="button">Submit</button>
-              <button id="publishButton" class="button button-danger" type="button" disabled>Publish</button>
+              <button id="savePaywallButton" class="button button-primary" type="button">Save candidate</button>
             </div>
           </header>
-
-          <section class="import-panel">
-            <div class="panel-head">
-              <div>
-                <h3>Paywall files</h3>
-                <p>Drop the exported folder — <code>index.html</code> and its <code>assets/</code>. Submit builds the document, runs every publish check, and saves it as a candidate.</p>
-                <p id="harnessNote" class="harness-note">Loading rendering harness…</p>
-              </div>
-              <div class="header-actions">
-                <button id="chooseFolderButton" class="button button-secondary button-small" type="button">Choose folder</button>
-                <button id="chooseFilesButton" class="button button-secondary button-small" type="button">Choose files</button>
-                <button id="clearImportButton" class="button button-secondary button-small" type="button">Clear</button>
-              </div>
-            </div>
-
-            <div id="importDropzone" class="dropzone" tabindex="0" role="button" aria-describedby="importSummary">
-              <strong>Drop paywall files here</strong>
-              <span>Images are re-encoded and inlined, the CTA bridge is wired, and the document hash is computed in your browser.</span>
-            </div>
-
-            <input id="folderInput" type="file" multiple webkitdirectory directory hidden>
-            <input id="filesInput" type="file" multiple hidden>
-
-            <div id="importSummary" class="import-summary is-hidden"></div>
-
-            <div id="importOptions" class="import-options is-hidden">
-              <label class="compact-field" for="importEntry">
-                Document
-                <select id="importEntry"></select>
-              </label>
-              <label class="checkbox-field">
-                <input id="importFlatten" type="checkbox">
-                Bake the full-bleed flatten layer (legacy <code>.device</code> / <code>.screen</code> paywalls)
-              </label>
-            </div>
-          </section>
-
-          <section id="validationPanel" class="validation-panel is-hidden">
-            <div class="panel-head">
-              <div>
-                <h3>Validation</h3>
-                <p id="validationSummary"></p>
-              </div>
-              <span id="validationBadge" class="status-tag"></span>
-            </div>
-            <div id="validationChecks" class="check-list"></div>
-          </section>
 
           <div class="detail-grid">
             <section class="editor-panel">
@@ -313,23 +263,5 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <!-- The rendering harness. Each locale and device is composed through the SDK
-       and measured here before a candidate can be published.
-
-       This is deliberately on-screen and position:fixed. Chrome throttles
-       rendering in off-screen cross-origin frames, and a sandboxed frame is
-       cross-origin, so an off-screen harness never gets a requestAnimationFrame
-       and every render silently times out. Keeping it in the viewport also lets
-       the operator watch the checks run. -->
-  <div id="renderStage" class="render-stage is-hidden" aria-live="polite">
-    <div class="render-stage-head">
-      <strong>Rendering</strong>
-      <span id="renderStageLabel"></span>
-    </div>
-    <div class="render-stage-viewport">
-      <iframe id="probeFrame" title="Device rendering harness" sandbox="allow-scripts" width="390" height="844"></iframe>
-    </div>
-  </div>
 </body>
 </html>

@@ -71,29 +71,8 @@ describe("V2 config dashboard assets", () => {
     expect(asset.body).toContain('management_status === "legacy_locked"');
   });
 
-  it("serves the import and rendering harness with a submit-then-publish flow", () => {
-    const shell = renderAsset("/config-dashboard");
-    expect(shell.body).toContain("/config-dashboard/import.js");
-    expect(shell.body).toContain('id="importDropzone"');
-    expect(shell.body).toContain('id="submitButton"');
-    expect(shell.body).toContain('id="publishButton"');
-    expect(shell.body).toContain('id="probeFrame"');
-
-    const asset = renderAsset("/config-dashboard/import.js");
-    expect(asset.served).toBe(true);
-    expect(asset.headers["Content-Type"]).toContain("text/javascript");
-    expect(() => new Function(asset.body)).not.toThrow();
-
-    const script = renderAsset("/config-dashboard/app.js").body;
-    expect(script).toContain('"/validate"');
-    expect(script).toContain('"/preflight"');
-    // Publish stays disabled until a release carries a recorded verdict.
-    expect(script).toContain("release.preflight_status");
-  });
-
   it("uses a fixed asset allowlist", () => {
     expect(renderAsset("/config-dashboard/styles.css").served).toBe(true);
-    expect(renderAsset("/config-dashboard/import.js").served).toBe(true);
     expect(renderAsset("/config-dashboard/../../package.json").served).toBe(false);
     expect(renderAsset("/config-dashboard/unknown.js").served).toBe(false);
   });

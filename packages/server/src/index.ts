@@ -163,9 +163,8 @@ async function handler(req: IncomingMessage, res: ServerResponse): Promise<void>
     res.end(JSON.stringify({ error: "Not found" }));
   } catch (err: any) {
     if (err?.name === "PayloadTooLargeError") {
-      const limitKb = Math.round((Number(err.limitBytes) || 512 * 1024) / 1024);
       res.writeHead(413, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: `Request body too large (max ${limitKb}KB)` }));
+      res.end(JSON.stringify({ error: "Request body too large (max 512KB)" }));
       return;
     }
     console.error("[Tranzmit] Unhandled error:", err);

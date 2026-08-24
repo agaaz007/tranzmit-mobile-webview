@@ -266,18 +266,6 @@ describe("V2 paywall publishing", () => {
           rowCount: 1,
         };
       }
-      if (/FROM paywall_release_preflights/i.test(sql)) {
-        return {
-          rows: [{
-            id: "preflight-1",
-            status: "pass",
-            report: { status: "pass", checks: [] },
-            checked_by: "dashboard",
-            created_at: "2026-08-22T00:00:00.000Z",
-          }],
-          rowCount: 1,
-        };
-      }
       if (/UPDATE paywall_environment_bindings/i.test(sql)) {
         return { rows: [], rowCount: 0 };
       }

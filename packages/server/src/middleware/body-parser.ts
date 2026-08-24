@@ -11,7 +11,7 @@ export function readBody(req: IncomingMessage, maxSize = MAX_BODY_SIZE): Promise
       size += typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.length;
       if (size > maxSize) {
         req.destroy();
-        reject(new PayloadTooLargeError(maxSize));
+        reject(new PayloadTooLargeError());
         return;
       }
       body += chunk;
@@ -24,10 +24,8 @@ export function readBody(req: IncomingMessage, maxSize = MAX_BODY_SIZE): Promise
 
 export class PayloadTooLargeError extends Error {
   status = 413;
-  readonly limitBytes: number;
-  constructor(limitBytes = MAX_BODY_SIZE) {
+  constructor() {
     super("Request body too large");
     this.name = "PayloadTooLargeError";
-    this.limitBytes = limitBytes;
   }
 }

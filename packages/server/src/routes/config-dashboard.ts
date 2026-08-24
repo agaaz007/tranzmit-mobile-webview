@@ -34,26 +34,6 @@ const ASSETS: Record<string, { file: string; type: string; cache: string }> = {
     type: "text/javascript; charset=utf-8",
     cache: "no-cache",
   },
-  "/config-dashboard/import.js": {
-    file: "import.js",
-    type: "text/javascript; charset=utf-8",
-    cache: "no-cache",
-  },
-  "/config-dashboard/responsive.mjs": {
-    file: "responsive.mjs",
-    type: "text/javascript; charset=utf-8",
-    cache: "no-cache",
-  },
-  "/config-dashboard/compose.bundle.js": {
-    file: "compose.bundle.js",
-    type: "text/javascript; charset=utf-8",
-    cache: "no-cache",
-  },
-  "/config-dashboard/preview-harness.json": {
-    file: "preview-harness.json",
-    type: "application/json; charset=utf-8",
-    cache: "no-cache",
-  },
 };
 
 /**

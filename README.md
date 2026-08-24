@@ -435,9 +435,7 @@ dashboard requests are accepted only from the API's exact origin.
 - `GET /v1/paywall-documents/:placement/:variant/:cacheKey.json` - Hosted WebView document payloads for CDN/edge caching and SDK offline hydration
 - `GET /config?key=pk_xxx&userId=u_xxx` - Legacy config endpoint
 - `POST /events` - Receives batched analytics events
-- `GET /config-dashboard` - Admin console: drop a paywall export, Submit to validate it, Publish to move the environment pointer. See [docs/config-publishing-v2.md](docs/config-publishing-v2.md#publishing-a-paywall-from-the-dashboard)
-- `POST /admin/paywalls/:bindingId/validate` - Dry-run publish checks on a candidate spec; writes nothing
-- `POST /admin/paywalls/:bindingId/releases/:releaseId/preflight` - Records the verdict that `publish` requires
+- `GET /config-dashboard` - Mobile admin console for clients, paywalls, placement slots, and events
 - `GET /health` - Health check with DB and Statsig booleans
 
 ## Development

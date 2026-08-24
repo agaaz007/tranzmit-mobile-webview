@@ -13,16 +13,12 @@ import {
   getPaywallDetails,
   getPaywallReleaseDiff,
   getPlacementRevisionDiff,
-  getReleasePreflight,
   listPlacementRevisions,
-  previewPaywallCandidate,
   promotePaywallContent,
   publishPaywallRelease,
   publishPlacementRevision,
-  runReleasePreflight,
   setEnvironmentConfigSource,
 } from "../config-publish.js";
-import { REQUIRED_PROBE_WIDTHS, type ViewportAudit } from "../paywall-preflight.js";
 import { readBody } from "../middleware/body-parser.js";
 import type { AdminAuthContext } from "../middleware/auth.js";
 
@@ -93,45 +89,6 @@ export async function handleAdminV2(
         checkout: body.checkout,
         createdBy: actor,
       }, workspaceId));
-      return true;
-    }
-
-    // The device matrix itself lives in the dashboard's vendored responsive.mjs,
-    // shared with the authoring harness. This only reports which widths a
-    // publish is gated on, so the UI can explain the requirement.
-    if (path === "/admin/v2/preflight/viewports" && req.method === "GET") {
-      sendJson(res, 200, { requiredWidths: REQUIRED_PROBE_WIDTHS });
-      return true;
-    }
-
-    // Dry run: validate an unsaved candidate. Writes nothing, never 422s — the
-    // report itself carries the verdict so the dashboard can render every
-    // problem at once instead of one exception at a time.
-    const validateMatch = path.match(/^\/admin\/paywalls\/([^/]+)\/validate$/);
-    if (validateMatch && req.method === "POST") {
-      const body = await readJson(req);
-      sendJson(res, 200, await previewPaywallCandidate(validateMatch[1], {
-        spec: body.spec,
-        viewports: normalizeViewports(body.viewports),
-      }, workspaceId));
-      return true;
-    }
-
-    const preflightMatch = path.match(/^\/admin\/paywalls\/([^/]+)\/releases\/([^/]+)\/preflight$/);
-    if (preflightMatch && req.method === "POST") {
-      const body = await readJson(req);
-      sendJson(res, 200, await runReleasePreflight({
-        bindingId: preflightMatch[1],
-        releaseId: preflightMatch[2],
-        viewports: normalizeViewports(body.viewports),
-        actor,
-        workspaceId,
-      }));
-      return true;
-    }
-    if (preflightMatch && req.method === "GET") {
-      const report = await getReleasePreflight(preflightMatch[1], preflightMatch[2], workspaceId);
-      sendJson(res, report ? 200 : 404, report || { error: "No validation has been recorded for these bytes" });
       return true;
     }
 
@@ -264,40 +221,6 @@ export async function handleAdminV2(
   return false;
 }
 
-/**
- * Render audits arrive from the dashboard's rendering harness. Only the verdict
- * and its reasons are kept; the harness's `details` payload is dropped so a
- * stored report stays a fixed, bounded shape.
- */
-function normalizeViewports(value: unknown): ViewportAudit[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const audits: ViewportAudit[] = [];
-  for (const item of value) {
-    if (!item || typeof item !== "object") continue;
-    const audit = item as Record<string, unknown>;
-    const width = Number(audit.width);
-    const height = Number(audit.height);
-    if (!Number.isFinite(width) || !Number.isFinite(height)) continue;
-    audits.push({
-      id: String(audit.id || `${audit.locale || "default"}:${width}`),
-      deviceId: String(audit.deviceId || `${width}x${height}`),
-      ...(audit.label ? { label: String(audit.label) } : {}),
-      locale: String(audit.locale || "default"),
-      width,
-      height,
-      passed: Boolean(audit.passed),
-      failures: stringList(audit.failures),
-      ...(audit.timedOut ? { timedOut: true } : {}),
-    });
-  }
-  return audits;
-}
-
-function stringList(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string").slice(0, 20);
-}
-
 function normalizeVariants(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.map((variant: any) => ({
@@ -309,23 +232,9 @@ function normalizeVariants(value: unknown) {
   }));
 }
 
-/**
- * A paywall document may legitimately be up to 512KB of HTML (the schema's hard
- * cap), and a candidate carries localization, products, and viewport probes on
- * top of that. The transport limit has to sit above the content limit or the
- * document size rule would never be the thing that rejects an oversized import.
- */
-const MAX_CONFIG_BODY_BYTES = 2 * 1024 * 1024;
-
 async function readJson(req: IncomingMessage): Promise<any> {
-  let raw: string;
   try {
-    raw = await readBody(req, MAX_CONFIG_BODY_BYTES);
-  } catch (error) {
-    if (error && (error as { name?: string }).name === "PayloadTooLargeError") throw error;
-    throw new ConfigError("Could not read request body", 400);
-  }
-  try {
+    const raw = await readBody(req);
     return raw ? JSON.parse(raw) : {};
   } catch {
     throw new ConfigError("Invalid JSON body", 400);
