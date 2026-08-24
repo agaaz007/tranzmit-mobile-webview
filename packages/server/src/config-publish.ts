@@ -6,6 +6,11 @@ import {
 } from "@tranzmit/shared";
 import { validatePaywallSpec } from "./paywall-schema.js";
 import {
+  runPaywallPreflight,
+  type PreflightReport,
+  type ViewportAudit,
+} from "./paywall-preflight.js";
+import {
   database,
   getEnvironmentPaywall,
   withTransaction,
@@ -334,6 +339,205 @@ export async function getPaywallReleaseDiff(
   };
 }
 
+export type PreflightMode = "enforce" | "warn" | "off";
+
+/**
+ * Whether a passing preflight is required before a pointer may move.
+ * `warn` and `off` exist for incident response, when the fastest safe action is
+ * to publish a known-good document without a browser available to measure it.
+ */
+export function publishPreflightMode(): PreflightMode {
+  const raw = (process.env.PAYWALL_PUBLISH_PREFLIGHT || "enforce").trim().toLowerCase();
+  return raw === "off" || raw === "warn" ? raw : "enforce";
+}
+
+/**
+ * Fingerprints the environment-specific half of a release. Content already has
+ * `content_hash`; this covers the products and checkout binding, so swapping a
+ * billing product ID invalidates a previous verdict.
+ */
+export function productsFingerprint(products: unknown, checkout: unknown): string {
+  return sha256Hex(stableJson({
+    products: Array.isArray(products) ? products : [],
+    checkout: isRecord(checkout) ? checkout : null,
+  }));
+}
+
+/**
+ * Validates a candidate spec without writing anything. This is what the
+ * dashboard's Submit button calls before it creates a release, so an operator
+ * sees every problem while the import is still a draft.
+ */
+export async function previewPaywallCandidate(
+  bindingId: string,
+  input: { spec: unknown; viewports?: ViewportAudit[] },
+  workspaceId?: string
+): Promise<PreflightReport & { binding_id: string; environment: string }> {
+  const binding = await getBindingForUpdate(database, bindingId, workspaceId, false);
+  const report = runPaywallPreflight({
+    spec: input.spec,
+    environmentKind: binding.environment_kind,
+    testEnvironmentProductIds: await siblingTestProductIds(database, binding),
+    viewports: input.viewports,
+  });
+  return { ...report, binding_id: binding.id, environment: binding.environment_kind };
+}
+
+/**
+ * Runs preflight against a stored release and records the verdict. The recorded
+ * row is what `publishPaywallRelease` checks, so a release can only be published
+ * with the exact bytes and products that were validated.
+ */
+export async function runReleasePreflight(input: {
+  bindingId: string;
+  releaseId: string;
+  viewports?: ViewportAudit[];
+  actor: string;
+  workspaceId?: string;
+}): Promise<Record<string, unknown>> {
+  const binding = await getBindingForUpdate(database, input.bindingId, input.workspaceId, false);
+  const release = await getReleaseWithContent(database, input.releaseId, binding.id);
+  if (!release) throw new ConfigError("Release not found", 404);
+
+  const report = runPaywallPreflight({
+    spec: composePaywallSpec(release.content, release.products, release.checkout),
+    environmentKind: binding.environment_kind,
+    testEnvironmentProductIds: await siblingTestProductIds(database, binding),
+    viewports: input.viewports,
+  });
+  const productsHash = productsFingerprint(release.products, release.checkout);
+
+  const stored = await database.query<{ id: string; created_at: string }>(
+    `INSERT INTO paywall_release_preflights (
+       release_id, binding_id, client_id, content_hash, products_hash,
+       status, report, checked_by
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (release_id, content_hash, products_hash) DO UPDATE
+       SET status = EXCLUDED.status,
+           report = EXCLUDED.report,
+           checked_by = EXCLUDED.checked_by,
+           created_at = now()
+     RETURNING id, created_at`,
+    [
+      release.id,
+      binding.id,
+      binding.client_id,
+      release.content_hash,
+      productsHash,
+      report.status,
+      JSON.stringify(report),
+      normalizeText(input.actor) || "api",
+    ]
+  );
+
+  return {
+    ...report,
+    id: stored.rows[0].id,
+    binding_id: binding.id,
+    release_id: release.id,
+    environment: binding.environment_kind,
+    content_hash: release.content_hash,
+    products_hash: productsHash,
+    checked_at: stored.rows[0].created_at,
+  };
+}
+
+/** The recorded verdict for a release's current bytes, or null if never run. */
+export async function getReleasePreflight(
+  bindingId: string,
+  releaseId: string,
+  workspaceId?: string
+): Promise<Record<string, unknown> | null> {
+  const binding = await getBindingForUpdate(database, bindingId, workspaceId, false);
+  const release = await getReleaseWithContent(database, releaseId, binding.id);
+  if (!release) throw new ConfigError("Release not found", 404);
+  const row = await readPreflight(database, release.id, release.content_hash, productsFingerprint(release.products, release.checkout));
+  if (!row) return null;
+  return {
+    ...(row.report as JsonRecord),
+    id: row.id,
+    status: row.status,
+    binding_id: binding.id,
+    release_id: release.id,
+    checked_by: row.checked_by,
+    checked_at: row.created_at,
+  };
+}
+
+async function readPreflight(
+  db: DbExecutor,
+  releaseId: string,
+  contentHash: string,
+  productsHash: string
+): Promise<{ id: string; status: string; report: unknown; checked_by: string; created_at: string } | null> {
+  const result = await db.query<{
+    id: string;
+    status: string;
+    report: unknown;
+    checked_by: string;
+    created_at: string;
+  }>(
+    `SELECT id, status, report, checked_by, created_at
+       FROM paywall_release_preflights
+      WHERE release_id = $1 AND content_hash = $2 AND products_hash = $3`,
+    [releaseId, contentHash, productsHash]
+  );
+  return result.rows[0] || null;
+}
+
+async function siblingTestProductIds(
+  db: DbExecutor,
+  binding: { project_key: string; paywall_id: string; environment_kind: "test" | "live" }
+): Promise<string[]> {
+  if (binding.environment_kind !== "live") return [];
+  const result = await db.query<{ products: unknown[] | null }>(
+    `SELECT r.products
+       FROM paywall_environment_bindings b
+       JOIN clients c ON c.id = b.client_id
+       JOIN paywall_environment_releases r ON r.id = b.current_release_id
+      WHERE b.project_key = $1
+        AND b.paywall_id = $2
+        AND c.environment_kind = 'test'`,
+    [binding.project_key, binding.paywall_id]
+  );
+  const ids = new Set<string>();
+  for (const row of result.rows) {
+    for (const product of row.products || []) {
+      if (isRecord(product) && typeof product.id === "string" && product.id.trim()) ids.add(product.id.trim());
+    }
+  }
+  return Array.from(ids);
+}
+
+/**
+ * Rollback is exempt: the target release was already serving real users, so
+ * requiring a fresh verdict would block the fastest way out of an incident.
+ */
+async function assertPublishPreflight(
+  db: DbExecutor,
+  releaseId: string,
+  contentHash: string,
+  productsHash: string
+): Promise<void> {
+  const mode = publishPreflightMode();
+  if (mode === "off") return;
+  const row = await readPreflight(db, releaseId, contentHash, productsHash);
+  if (row && row.status !== "fail") return;
+
+  const reason = row
+    ? "The recorded validation for these exact bytes failed."
+    : "This release has not been validated against this environment's billing products and device sizes.";
+  if (mode === "warn") {
+    console.warn(`[Tranzmit] Publishing release ${releaseId} without a passing preflight. ${reason}`);
+    return;
+  }
+  throw new ConfigError(`Run validation before publishing. ${reason}`, 428, {
+    release_id: releaseId,
+    preflight_status: row ? row.status : null,
+    report: row ? row.report : null,
+  });
+}
+
 export async function publishPaywallRelease(input: {
   bindingId: string;
   releaseId: string;
@@ -348,6 +552,14 @@ export async function publishPaywallRelease(input: {
     const release = await getReleaseWithContent(db, input.releaseId, binding.id);
     if (!release) throw new ConfigError("Release not found", 404);
     validatePublishableSpec(composePaywallSpec(release.content, release.products, release.checkout));
+    if (input.action !== "rollback") {
+      await assertPublishPreflight(
+        db,
+        release.id,
+        release.content_hash,
+        productsFingerprint(release.products, release.checkout)
+      );
+    }
 
     const expected = input.expectedCurrentReleaseId ?? null;
     const updated = await db.query(
@@ -669,7 +881,43 @@ export async function listPlacementRevisions(
 export async function getPaywallDetails(bindingId: string, workspaceId?: string) {
   const paywall = await getEnvironmentPaywall(bindingId, workspaceId);
   if (!paywall) throw new ConfigError("Paywall binding not found", 404);
-  return paywall;
+  return { ...paywall, releases: await attachPreflightStatus(bindingId, paywall.releases) };
+}
+
+/**
+ * Annotates each release with the verdict recorded for its exact bytes and
+ * products, so the dashboard can tell "validated" from "not validated yet"
+ * without re-running anything. A release whose products changed after the check
+ * simply has no matching row and reads as unvalidated.
+ */
+async function attachPreflightStatus(bindingId: string, releases: unknown): Promise<unknown> {
+  if (!Array.isArray(releases) || releases.length === 0) return releases;
+  const rows = await database.query<{
+    release_id: string;
+    content_hash: string;
+    products_hash: string;
+    status: string;
+    report: unknown;
+    created_at: string;
+  }>(
+    `SELECT release_id, content_hash, products_hash, status, report, created_at
+       FROM paywall_release_preflights
+      WHERE binding_id = $1`,
+    [bindingId]
+  );
+  const byFingerprint = new Map(
+    rows.rows.map((row) => [`${row.release_id}:${row.content_hash}:${row.products_hash}`, row])
+  );
+  return releases.map((release: any) => {
+    const key = `${release.id}:${release.content_hash}:${productsFingerprint(release.products, release.checkout)}`;
+    const match = byFingerprint.get(key);
+    return {
+      ...release,
+      preflight_status: match ? match.status : null,
+      preflight_report: match ? match.report : null,
+      preflight_checked_at: match ? match.created_at : null,
+    };
+  });
 }
 
 export async function setEnvironmentConfigSource(input: {

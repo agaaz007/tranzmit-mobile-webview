@@ -786,6 +786,16 @@ describe.runIf(Boolean(connectionString))("Paywall Publishing V2 PostgreSQL inva
 
     const { publishPaywallRelease, publishPlacementRevision } = await import("../src/config-publish.js");
     applicationPool = (await import("../src/db.js")).pool;
+
+    await expect(publishPaywallRelease({
+      bindingId: "binding-cas",
+      releaseId: "release-cas-candidate",
+      expectedCurrentReleaseId: "release-cas-current",
+      actor: "unvalidated-publisher",
+    })).rejects.toMatchObject({ status: 428 });
+    expect(await publishAuditCount(database, "paywall", "pw-cas")).toBe(0);
+
+    await recordPassingPreflight(database, "binding-cas", "release-cas-candidate");
     await expect(publishPaywallRelease({
       bindingId: "binding-cas",
       releaseId: "release-cas-candidate",
@@ -1198,6 +1208,41 @@ async function cutoverAuditCount(database: pg.Pool, clientId: string): Promise<n
       WHERE client_id = $1 AND entity_type = 'migration' AND action = 'cutover'`,
     [clientId]
   )).rows[0].count);
+}
+
+/**
+ * Publishing requires a recorded passing check for the exact bytes and
+ * products. These tests are about SQL invariants rather than the checks
+ * themselves, so they record the verdict directly.
+ */
+async function recordPassingPreflight(
+  database: pg.Pool,
+  bindingId: string,
+  releaseId: string
+): Promise<void> {
+  const { productsFingerprint } = await import("../src/config-publish.js");
+  const release = await database.query(
+    `SELECT r.client_id, r.products, r.checkout, cr.content_hash
+       FROM paywall_environment_releases r
+       JOIN paywall_content_revisions cr ON cr.id = r.content_revision_id
+      WHERE r.id = $1 AND r.binding_id = $2`,
+    [releaseId, bindingId]
+  );
+  const row = release.rows[0];
+  await database.query(
+    `INSERT INTO paywall_release_preflights (
+       release_id, binding_id, client_id, content_hash, products_hash, status, report, checked_by
+     ) VALUES ($1, $2, $3, $4, $5, 'pass', $6, 'integration')
+     ON CONFLICT (release_id, content_hash, products_hash) DO UPDATE SET status = 'pass'`,
+    [
+      releaseId,
+      bindingId,
+      row.client_id,
+      row.content_hash,
+      productsFingerprint(row.products, row.checkout),
+      JSON.stringify({ status: "pass", checks: [] }),
+    ]
+  );
 }
 
 async function publishAuditCount(

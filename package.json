@@ -17,7 +17,8 @@
     "compare:config-v2": "tsx packages/server/src/compare-v2.ts",
     "dev:server": "npm run dev --workspace=packages/server",
     "seed": "node scripts/seed.mjs",
-    "smoke:admin": "node scripts/smoke-admin.mjs"
+    "smoke:admin": "node scripts/smoke-admin.mjs",
+    "vendor:preview-harness": "node scripts/vendor-preview-harness.mjs"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",

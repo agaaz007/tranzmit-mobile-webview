@@ -47,7 +47,7 @@ Do not proceed if an unauthenticated admin request succeeds or the health probe 
 
 ### 2. Deploy V2; let the migration run as the Railway pre-deploy command
 
-`railway.toml` runs `npm run migrate` before application startup. Migration `007_paywall_publishing_v2.sql` is additive and serialized with a PostgreSQL advisory lock. The application must not start if migration fails.
+`railway.toml` runs `npm run migrate` before application startup. Migrations `007_paywall_publishing_v2.sql` (the V2 tables) and `008_paywall_release_preflight.sql` (recorded publish verdicts) are additive and serialized with a PostgreSQL advisory lock. The application must not start if migration fails.
 
 Verify the migration and its idempotence from the release image or an equivalent one-off Railway command:
 
@@ -191,6 +191,54 @@ Repeat the live SDK smoke tests immediately after the switch and monitor errors,
 ### 7. Cut over Influish Production last
 
 Only after HiAstro live is stable, run the comparator and equivalent SDK checks for Influish Production (`pk_live_a1323f76d397778b6ed5eb04`), then apply the same CAS switch from `legacy` to `v2`. Keep `management_status = 'legacy_locked'`. Any Influish comparator or smoke-test failure leaves that environment on legacy and does not block rollback of another environment.
+
+## Publishing a paywall from the dashboard
+
+The intended day-to-day flow at `/config-dashboard` is: pick the paywall, drop its exported folder, press **Submit**, read the report, press **Publish**.
+
+**Submit** does four things, in order:
+
+1. Builds the exact document in the browser: resolves every `assets/...` reference, re-encodes images to WebP inside their size class, inlines them, tags the CTA with `data-tranzmit-action="cta"` if the export forgot to, optionally bakes the full-bleed flatten layer for legacy `.device` / `.screen` skeletons, and computes the SHA-256 integrity over the final bytes.
+2. Composes the candidate through the SDK's real `renderDocument()` at **every configured locale** across the seven-device matrix, and audits each render in-frame.
+3. Sends the candidate plus those verdicts to `POST /admin/paywalls/:bindingId/validate`, which returns a report without writing anything.
+4. If nothing failed, creates the immutable candidate release and records the verdict against its exact content and products hash.
+
+### The rendering harness is shared with authoring
+
+Step 2 does not use a dashboard-specific renderer. `scripts/vendor-preview-harness.mjs` vendors two files out of the SDK repo's `templates/preview` into `packages/server/public/config-dashboard`:
+
+- `responsive.mjs` — copied verbatim. It owns `RESPONSIVE_DEVICES` (320, 360, 375, 390, 412, 430 phone widths plus iPad, each with its own safe-area insets and DPR) and `injectResponsiveAudit()`, which checks horizontal overflow, painted text overflow, component-bound overflow, billing copy/price collisions, reminder/toggle collisions, insight collisions, CTA presence and fit, broken images, unresolved localization tokens, and forbidden bridge controls.
+- `compose.bundle.js` — an esbuild bundle of the SDK's `renderDocument` and `resolveTheme`. `compose.ts` is deliberately free of react-native imports, so the same composer runs in the app, in the authoring harness, and here.
+
+`preview-harness.json` records the SDK version and a hash per file, and `tests/preview-harness-vendoring.test.ts` fails when a vendored file drifts or when `REQUIRED_PROBE_WIDTHS` stops matching the phone widths the matrix renders. Re-vendor with:
+
+```bash
+TRANZMIT_RN_SDK=/path/to/tranzmit-react-native-sdk npm run vendor:preview-harness
+```
+
+This matters because a raw browser render is not what users see. It misses safe areas, the SDK wrapper CSS, localization, and the real usable height — the first entry in the harness's own `RESPONSIVE_LEARNINGS`. Measuring the raw file would pass paywalls that break on device.
+
+Two consequences worth knowing:
+
+- **The harness frame is on-screen during Submit, by necessity.** Chrome throttles rendering in off-screen cross-origin frames, and the sandbox makes the frame cross-origin, so an off-screen harness never receives a `requestAnimationFrame` and every render times out. It is `position: fixed` so scrolling cannot throttle it.
+- **A render that does not report back is a failure**, never a pass.
+
+The remaining checks live in `packages/server/src/paywall-preflight.ts`: spec schema, document bytes and integrity, localization coverage per locale, unresolved and remote assets, the CTA bridge, bridge actions, billing product IDs, the responsive authoring rules, and rendering coverage.
+
+Three of them are the reason this exists at all:
+
+- **Billing.** A live environment fails if it carries the sibling test environment's Billing Product ID, if any product ID is a placeholder, or if the document's `data-product-id` names a SKU this environment does not sell.
+- **Device rendering.** A publish is refused unless every configured locale was rendered at all six phone widths. One locale proves nothing about the others: a missing token renders as an empty string and can change the layout.
+- **Bridge actions.** `data-tranzmit-action` values outside `cta`, `dismiss`, `custom_action`, and `open_url` fail. That is how a `back` control reintroduced by a re-export is caught — it is markup the SDK will never route. A paywall can also set `metadata.forbidBackAction: "true"` to name the contract explicitly.
+
+**Publish** then moves one pointer, and `POST /v1/config` serves the new release to every user in that environment within `CONFIG_TTL_SECONDS` (60s by default) plus whatever the SDK holds in its own cache. Document URLs stay content-addressed and immutable, so an old URL keeps returning its old payload.
+
+`publishPaywallRelease` refuses to move a pointer without a recorded non-failing verdict for the release's exact content and products. Two deliberate exemptions:
+
+- **Rollback** is never gated. The target already served real traffic, and requiring a fresh verdict would slow down the fastest way out of a bad publish.
+- `PAYWALL_PUBLISH_PREFLIGHT=warn` logs instead of blocking, and `=off` disables the gate entirely, for incident response when no browser is available to measure a render. Leave it unset (`enforce`) otherwise.
+
+Changing an environment's products invalidates the verdict, because the fingerprint covers products and checkout as well as content. Re-run Submit after editing billing fields.
 
 ## Rollback
 
