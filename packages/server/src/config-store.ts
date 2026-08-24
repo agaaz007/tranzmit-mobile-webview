@@ -359,6 +359,12 @@ export async function getEnvironmentPaywall(
              'checkout', r.checkout,
              'created_by', r.created_by,
              'created_at', r.created_at,
+             -- When this release came from the legacy backfill, created_at is
+             -- the migration run, not the day the paywall was pushed. The
+             -- original timestamp was preserved on the content revision, so
+             -- expose it and let callers show the date that actually means
+             -- something to an operator.
+             'legacy_updated_at', cr.legacy_updated_at,
              'is_current', r.id = b.current_release_id
            ) ORDER BY r.release_number DESC
          ) FILTER (WHERE r.id IS NOT NULL),
