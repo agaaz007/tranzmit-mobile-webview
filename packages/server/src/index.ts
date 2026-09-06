@@ -4,7 +4,8 @@ import { handleEvents } from "./routes/events.js";
 import { handleAdmin } from "./routes/admin.js";
 import { serveConfigDashboard } from "./routes/config-dashboard.js";
 import { initStatsig, isConfigured as isStatsigConfigured, isInitialized as isStatsigInitialized, shutdownStatsig } from "./statsig.js";
-import { checkRateLimit, LIMITS } from "./middleware/rate-limit.js";
+import { checkRateLimit, enforcePublicRateLimit, getClientIp, publicKeyFromJson, LIMITS } from "./middleware/rate-limit.js";
+import { readBody } from "./middleware/body-parser.js";
 import { requireDashboardAuth } from "./middleware/dashboard-auth.js";
 import { applyRouteCors, handleCorsPreflight } from "./middleware/cors.js";
 import { handlePaywallDocument } from "./routes/paywall-documents.js";
@@ -13,12 +14,6 @@ import { pool } from "./db.js";
 import { startFallbackDetector } from "./fallback-detector.js";
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
-
-function getClientIp(req: IncomingMessage): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string") return forwarded.split(",")[0].trim();
-  return req.socket.remoteAddress || "unknown";
-}
 
 function rateLimited(res: ServerResponse, resetAt: number): void {
   res.writeHead(429, {
@@ -106,8 +101,14 @@ async function handler(req: IncomingMessage, res: ServerResponse): Promise<void>
 
     // --- Config endpoint (versioned + legacy) ---
     if ((path === "/v1/config" || path === "/config") && (req.method === "GET" || req.method === "POST")) {
-      const key = req.method === "POST" ? ip : (url.searchParams.get("key") || "unknown");
-      const rl = checkRateLimit(`config:${key}`, LIMITS.config);
+      // The SDK posts the public key in the body. Read it once here (memoized
+      // for the route handler) so the limit is scoped per customer + client
+      // rather than per bare IP, which carrier CGNAT shares across thousands
+      // of handsets. 64KB matches the route's own body cap.
+      const publicKey = req.method === "POST"
+        ? publicKeyFromJson(await readBody(req, 64 * 1024))
+        : url.searchParams.get("key");
+      const rl = enforcePublicRateLimit("config", publicKey, ip);
       if (!rl.allowed) { rateLimited(res, rl.resetAt); return; }
       await handleConfig(req, res);
       return;
@@ -115,8 +116,7 @@ async function handler(req: IncomingMessage, res: ServerResponse): Promise<void>
 
     // --- Hosted WebView document payloads ---
     if (path.startsWith("/v1/paywall-documents/")) {
-      const key = url.searchParams.get("key") || "unknown";
-      const rl = checkRateLimit(`paywall-doc:${key}`, LIMITS.config);
+      const rl = enforcePublicRateLimit("document", url.searchParams.get("key"), ip);
       if (!rl.allowed) { rateLimited(res, rl.resetAt); return; }
       await handlePaywallDocument(req, res, path);
       return;
@@ -130,7 +130,8 @@ async function handler(req: IncomingMessage, res: ServerResponse): Promise<void>
 
     // --- Events endpoint (versioned + legacy) ---
     if ((path === "/v1/events" || path === "/events") && req.method === "POST") {
-      const rl = checkRateLimit(`events:${ip}`, LIMITS.events);
+      const publicKey = publicKeyFromJson(await readBody(req, 64 * 1024));
+      const rl = enforcePublicRateLimit("events", publicKey, ip);
       if (!rl.allowed) { rateLimited(res, rl.resetAt); return; }
       await handleEvents(req, res);
       return;
