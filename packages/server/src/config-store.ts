@@ -1,4 +1,5 @@
 import type { PoolClient, QueryResult, QueryResultRow } from "pg";
+import type { AssignmentMode, EligibilityRule } from "./assignment.js";
 import { pool, query as poolQuery } from "./db.js";
 
 export interface DbExecutor {
@@ -53,6 +54,12 @@ export interface PublishedPlacementRouting {
   defaultBindingId: string;
   experimentId: string | null;
   targetingRules: unknown;
+  /** Absent or "statsig" keeps Statsig-driven assignment. */
+  assignmentMode?: AssignmentMode;
+  /** fixed_split only: percent of units forced to the default variant. */
+  holdoutPercent?: number;
+  /** fixed_split only: hash salt; null hashes on the placement id. */
+  assignmentSalt?: string | null;
   variants: Array<{
     id: string;
     variantId: string;
@@ -60,6 +67,8 @@ export interface PublishedPlacementRouting {
     status: "active" | "paused";
     fallbackRank: number;
     weight: number;
+    /** fixed_split only: trait conditions; null = eligible for every unit. */
+    eligibility?: EligibilityRule | null;
   }>;
 }
 
@@ -131,6 +140,9 @@ export async function getV2PublishedRouting(
     default_binding_id: string;
     statsig_experiment_id: string | null;
     targeting_rules: unknown;
+    assignment_mode: string | null;
+    holdout_percent: string | number | null;
+    assignment_salt: string | null;
     variants: Array<{
       id: string;
       variant_id: string;
@@ -138,6 +150,7 @@ export async function getV2PublishedRouting(
       status: "active" | "paused";
       fallback_rank: number;
       weight: number;
+      eligibility: EligibilityRule | null;
     }>;
   }>(
     `SELECT
@@ -149,6 +162,9 @@ export async function getV2PublishedRouting(
        pr.default_binding_id,
        pr.statsig_experiment_id,
        pr.targeting_rules,
+       pr.assignment_mode,
+       pr.holdout_percent,
+       pr.assignment_salt,
        COALESCE(
          json_agg(
            json_build_object(
@@ -157,7 +173,8 @@ export async function getV2PublishedRouting(
              'binding_id', prv.binding_id,
              'status', prv.status,
              'fallback_rank', prv.fallback_rank,
-             'weight', prv.weight
+             'weight', prv.weight,
+             'eligibility', prv.eligibility
            )
            ORDER BY
              CASE WHEN prv.variant_key = pr.default_variant_key THEN 0 ELSE 1 END,
@@ -185,6 +202,9 @@ export async function getV2PublishedRouting(
     defaultBindingId: row.default_binding_id,
     experimentId: row.statsig_experiment_id,
     targetingRules: row.targeting_rules,
+    assignmentMode: row.assignment_mode === "fixed_split" ? "fixed_split" : "statsig",
+    holdoutPercent: Number(row.holdout_percent) || 0,
+    assignmentSalt: row.assignment_salt || null,
     variants: (row.variants || []).map((variant) => ({
       id: variant.id,
       variantId: variant.variant_id,
@@ -192,6 +212,7 @@ export async function getV2PublishedRouting(
       status: variant.status,
       fallbackRank: Number(variant.fallback_rank) || 0,
       weight: Number(variant.weight) || 0,
+      eligibility: variant.eligibility ?? null,
     })),
   }));
 }
@@ -395,12 +416,14 @@ export async function listEnvironmentPlacements(
             pr.revision_number AS current_revision_number,
             pr.status, pr.default_variant_key, pr.default_binding_id,
             pr.statsig_experiment_id, pr.targeting_rules,
+            pr.assignment_mode, pr.holdout_percent, pr.assignment_salt,
             COALESCE(json_agg(json_build_object(
               'variant_key', prv.variant_key,
               'binding_id', prv.binding_id,
               'status', prv.status,
               'weight', prv.weight,
-              'fallback_rank', prv.fallback_rank
+              'fallback_rank', prv.fallback_rank,
+              'eligibility', prv.eligibility
             ) ORDER BY prv.fallback_rank, prv.variant_key)
             FILTER (WHERE prv.id IS NOT NULL), '[]'::json) AS variants
        FROM clients c

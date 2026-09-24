@@ -1,0 +1,1619 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`default (statsig) assignment path is unchanged > matches the pre-change V2 and legacy resolution snapshot 1`] = `
+[
+  {
+    "events": [
+      {
+        "events": [
+          {
+            "event": "paywall_resolved",
+            "properties": {
+              "intent": "marriage",
+              "resolved": "upgrade_pro=control (baseline), kundli_report=default",
+              "traits": "{"intent":"marriage"}",
+            },
+          },
+        ],
+        "identity": {
+          "identifiers": {
+            "stableID": "stable-holdout",
+          },
+          "privateTraits": {},
+          "storageUserId": "user-holdout",
+          "traits": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "userId": "user-holdout",
+        },
+        "publicKey": "pk_live_hiastro",
+        "sessionId": "user-holdout",
+        "userId": "user-holdout",
+      },
+    ],
+    "logs": [
+      {
+        "identifiers": {
+          "stableID": "stable-holdout",
+        },
+        "publicKey": "pk_live_hiastro",
+        "resolved": [
+          {
+            "assignedVariantId": "control",
+            "experimentId": null,
+            "trigger": "upgrade_pro",
+            "variant": "control",
+            "viaBaseline": true,
+          },
+          {
+            "assignedVariantId": "default",
+            "experimentId": null,
+            "trigger": "kundli_report",
+            "variant": "default",
+            "viaBaseline": false,
+          },
+        ],
+        "traits": {
+          "intent": "marriage",
+        },
+        "userId": "user-holdout",
+      },
+    ],
+    "name": "v2 baseline holdout",
+    "response": {
+      "_meta": {
+        "cache_ttl_seconds": 60,
+        "config_version": "v1",
+        "document_delivery": "hosted+inline",
+      },
+      "assets": {},
+      "placements": {
+        "kundli_report": {
+          "enabled": true,
+          "placementId": "pl_kundli",
+          "placement_id": "pl_kundli",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-default",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-default"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-default",
+              "url": "https://api.example.test/v1/paywall-documents/pl_kundli/default/cache-binding-default.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-default",
+            "templateId": "paywall",
+          },
+          "trigger": "kundli_report",
+          "variantId": "default",
+          "variantKey": "default",
+          "variant_key": "default",
+        },
+        "paused_trigger": null,
+        "upgrade_pro": {
+          "enabled": true,
+          "placementId": "pl_upgrade",
+          "placement_id": "pl_upgrade",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-control",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-control"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-control",
+              "url": "https://api.example.test/v1/paywall-documents/pl_upgrade/control/cache-binding-control.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-control",
+            "templateId": "paywall",
+          },
+          "trigger": "upgrade_pro",
+          "variantId": "control",
+          "variantKey": "control",
+          "variant_key": "control",
+        },
+      },
+      "ttl": 60,
+      "version": "1.0.0",
+    },
+    "statsigCalls": [
+      {
+        "experiment": "hiastro_baseline",
+        "user": {
+          "custom": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "customIDs": {
+            "stableID": "stable-holdout",
+            "tranzmitUserID": "user-holdout",
+          },
+          "userID": "user-holdout",
+        },
+      },
+    ],
+  },
+  {
+    "events": [
+      {
+        "events": [
+          {
+            "event": "paywall_resolved",
+            "properties": {
+              "intent": "marriage",
+              "resolved": "upgrade_pro=marriage-02, kundli_report=default",
+              "traits": "{"intent":"marriage"}",
+            },
+          },
+        ],
+        "identity": {
+          "identifiers": {
+            "stableID": "stable-autotune",
+          },
+          "privateTraits": {},
+          "storageUserId": "user-autotune",
+          "traits": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "userId": "user-autotune",
+        },
+        "publicKey": "pk_live_hiastro",
+        "sessionId": "user-autotune",
+        "userId": "user-autotune",
+      },
+    ],
+    "logs": [
+      {
+        "identifiers": {
+          "stableID": "stable-autotune",
+        },
+        "publicKey": "pk_live_hiastro",
+        "resolved": [
+          {
+            "assignedVariantId": "marriage-02",
+            "experimentId": "paywall_intent_marriage",
+            "trigger": "upgrade_pro",
+            "variant": "marriage-02",
+            "viaBaseline": false,
+          },
+          {
+            "assignedVariantId": "default",
+            "experimentId": null,
+            "trigger": "kundli_report",
+            "variant": "default",
+            "viaBaseline": false,
+          },
+        ],
+        "traits": {
+          "intent": "marriage",
+        },
+        "userId": "user-autotune",
+      },
+    ],
+    "name": "v2 autotune marriage",
+    "response": {
+      "_meta": {
+        "cache_ttl_seconds": 60,
+        "config_version": "v1",
+        "document_delivery": "hosted+inline",
+      },
+      "assets": {},
+      "placements": {
+        "kundli_report": {
+          "enabled": true,
+          "placementId": "pl_kundli",
+          "placement_id": "pl_kundli",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-default",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-default"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-default",
+              "url": "https://api.example.test/v1/paywall-documents/pl_kundli/default/cache-binding-default.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-default",
+            "templateId": "paywall",
+          },
+          "trigger": "kundli_report",
+          "variantId": "default",
+          "variantKey": "default",
+          "variant_key": "default",
+        },
+        "paused_trigger": null,
+        "upgrade_pro": {
+          "enabled": true,
+          "placementId": "pl_upgrade",
+          "placement_id": "pl_upgrade",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-marriage-02",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-marriage-02"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-marriage-02",
+              "url": "https://api.example.test/v1/paywall-documents/pl_upgrade/marriage-02/cache-binding-marriage-02.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-marriage-02",
+            "templateId": "paywall",
+          },
+          "trigger": "upgrade_pro",
+          "variantId": "marriage-02",
+          "variantKey": "marriage-02",
+          "variant_key": "marriage-02",
+        },
+      },
+      "ttl": 60,
+      "version": "1.0.0",
+    },
+    "statsigCalls": [
+      {
+        "experiment": "hiastro_baseline",
+        "user": {
+          "custom": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "customIDs": {
+            "stableID": "stable-autotune",
+            "tranzmitUserID": "user-autotune",
+          },
+          "userID": "user-autotune",
+        },
+      },
+      {
+        "experiment": "paywall_intent_marriage",
+        "user": {
+          "custom": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "customIDs": {
+            "stableID": "stable-autotune",
+            "tranzmitUserID": "user-autotune",
+          },
+          "userID": "user-autotune",
+        },
+      },
+    ],
+  },
+  {
+    "events": [
+      {
+        "events": [
+          {
+            "event": "paywall_resolved",
+            "properties": {
+              "intent": "marriage",
+              "resolved": "upgrade_pro=control (baseline), kundli_report=default",
+              "traits": "{"intent":"marriage"}",
+            },
+          },
+        ],
+        "identity": {
+          "identifiers": {},
+          "privateTraits": {},
+          "storageUserId": "user-baseline-string",
+          "traits": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "userId": "user-baseline-string",
+        },
+        "publicKey": "pk_live_hiastro",
+        "sessionId": "user-baseline-string",
+        "userId": "user-baseline-string",
+      },
+    ],
+    "logs": [
+      {
+        "identifiers": {},
+        "publicKey": "pk_live_hiastro",
+        "resolved": [
+          {
+            "assignedVariantId": "control",
+            "experimentId": null,
+            "trigger": "upgrade_pro",
+            "variant": "control",
+            "viaBaseline": true,
+          },
+          {
+            "assignedVariantId": "default",
+            "experimentId": null,
+            "trigger": "kundli_report",
+            "variant": "default",
+            "viaBaseline": false,
+          },
+        ],
+        "traits": {
+          "intent": "marriage",
+        },
+        "userId": "user-baseline-string",
+      },
+    ],
+    "name": "v2 autotune string boolean",
+    "response": {
+      "_meta": {
+        "cache_ttl_seconds": 60,
+        "config_version": "v1",
+        "document_delivery": "hosted+inline",
+      },
+      "assets": {},
+      "placements": {
+        "kundli_report": {
+          "enabled": true,
+          "placementId": "pl_kundli",
+          "placement_id": "pl_kundli",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-default",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-default"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-default",
+              "url": "https://api.example.test/v1/paywall-documents/pl_kundli/default/cache-binding-default.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-default",
+            "templateId": "paywall",
+          },
+          "trigger": "kundli_report",
+          "variantId": "default",
+          "variantKey": "default",
+          "variant_key": "default",
+        },
+        "paused_trigger": null,
+        "upgrade_pro": {
+          "enabled": true,
+          "placementId": "pl_upgrade",
+          "placement_id": "pl_upgrade",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-control",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-control"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-control",
+              "url": "https://api.example.test/v1/paywall-documents/pl_upgrade/control/cache-binding-control.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-control",
+            "templateId": "paywall",
+          },
+          "trigger": "upgrade_pro",
+          "variantId": "control",
+          "variantKey": "control",
+          "variant_key": "control",
+        },
+      },
+      "ttl": 60,
+      "version": "1.0.0",
+    },
+    "statsigCalls": [
+      {
+        "experiment": "hiastro_baseline",
+        "user": {
+          "custom": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "customIDs": {
+            "tranzmitUserID": "user-baseline-string",
+          },
+          "userID": "user-baseline-string",
+        },
+      },
+    ],
+  },
+  {
+    "events": [
+      {
+        "events": [
+          {
+            "event": "paywall_resolved",
+            "properties": {
+              "intent": "marriage",
+              "resolved": "upgrade_pro=control, kundli_report=default",
+              "traits": "{"intent":"marriage"}",
+            },
+          },
+        ],
+        "identity": {
+          "identifiers": {},
+          "privateTraits": {},
+          "storageUserId": "user-unknown-arm",
+          "traits": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "userId": "user-unknown-arm",
+        },
+        "publicKey": "pk_live_hiastro",
+        "sessionId": "user-unknown-arm",
+        "userId": "user-unknown-arm",
+      },
+    ],
+    "logs": [
+      {
+        "identifiers": {},
+        "publicKey": "pk_live_hiastro",
+        "resolved": [
+          {
+            "assignedVariantId": "arm-not-in-routing",
+            "experimentId": "paywall_intent_marriage",
+            "trigger": "upgrade_pro",
+            "variant": "control",
+            "viaBaseline": false,
+          },
+          {
+            "assignedVariantId": "default",
+            "experimentId": null,
+            "trigger": "kundli_report",
+            "variant": "default",
+            "viaBaseline": false,
+          },
+        ],
+        "traits": {
+          "intent": "marriage",
+        },
+        "userId": "user-unknown-arm",
+      },
+    ],
+    "name": "v2 unknown statsig arm falls back to default",
+    "response": {
+      "_meta": {
+        "cache_ttl_seconds": 60,
+        "config_version": "v1",
+        "document_delivery": "hosted+inline",
+      },
+      "assets": {},
+      "placements": {
+        "kundli_report": {
+          "enabled": true,
+          "placementId": "pl_kundli",
+          "placement_id": "pl_kundli",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-default",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-default"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-default",
+              "url": "https://api.example.test/v1/paywall-documents/pl_kundli/default/cache-binding-default.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-default",
+            "templateId": "paywall",
+          },
+          "trigger": "kundli_report",
+          "variantId": "default",
+          "variantKey": "default",
+          "variant_key": "default",
+        },
+        "paused_trigger": null,
+        "upgrade_pro": {
+          "enabled": true,
+          "placementId": "pl_upgrade",
+          "placement_id": "pl_upgrade",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-control",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-control"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-control",
+              "url": "https://api.example.test/v1/paywall-documents/pl_upgrade/control/cache-binding-control.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-control",
+            "templateId": "paywall",
+          },
+          "trigger": "upgrade_pro",
+          "variantId": "control",
+          "variantKey": "control",
+          "variant_key": "control",
+        },
+      },
+      "ttl": 60,
+      "version": "1.0.0",
+    },
+    "statsigCalls": [
+      {
+        "experiment": "hiastro_baseline",
+        "user": {
+          "custom": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "customIDs": {
+            "tranzmitUserID": "user-unknown-arm",
+          },
+          "userID": "user-unknown-arm",
+        },
+      },
+      {
+        "experiment": "paywall_intent_marriage",
+        "user": {
+          "custom": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "customIDs": {
+            "tranzmitUserID": "user-unknown-arm",
+          },
+          "userID": "user-unknown-arm",
+        },
+      },
+    ],
+  },
+  {
+    "events": [
+      {
+        "events": [
+          {
+            "event": "paywall_resolved",
+            "properties": {
+              "intent": "career",
+              "resolved": "upgrade_pro=marriage-03, kundli_report=default",
+              "traits": "{"intent":"career"}",
+            },
+          },
+        ],
+        "identity": {
+          "identifiers": {
+            "stableID": "stable-anonymous",
+          },
+          "privateTraits": {},
+          "storageUserId": "stable-anonymous",
+          "traits": {
+            "intent": "career",
+            "publicKey": "pk_live_hiastro",
+          },
+          "userId": undefined,
+        },
+        "publicKey": "pk_live_hiastro",
+        "sessionId": "stable-anonymous",
+        "userId": "stable-anonymous",
+      },
+    ],
+    "logs": [
+      {
+        "identifiers": {
+          "stableID": "stable-anonymous",
+        },
+        "publicKey": "pk_live_hiastro",
+        "resolved": [
+          {
+            "assignedVariantId": "marriage-03",
+            "experimentId": "paywall_default",
+            "trigger": "upgrade_pro",
+            "variant": "marriage-03",
+            "viaBaseline": false,
+          },
+          {
+            "assignedVariantId": "default",
+            "experimentId": null,
+            "trigger": "kundli_report",
+            "variant": "default",
+            "viaBaseline": false,
+          },
+        ],
+        "traits": {
+          "intent": "career",
+        },
+        "userId": null,
+      },
+    ],
+    "name": "v2 non-matching intent uses placement experiment",
+    "response": {
+      "_meta": {
+        "cache_ttl_seconds": 60,
+        "config_version": "v1",
+        "document_delivery": "hosted+inline",
+      },
+      "assets": {},
+      "placements": {
+        "kundli_report": {
+          "enabled": true,
+          "placementId": "pl_kundli",
+          "placement_id": "pl_kundli",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-default",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-default"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-default",
+              "url": "https://api.example.test/v1/paywall-documents/pl_kundli/default/cache-binding-default.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-default",
+            "templateId": "paywall",
+          },
+          "trigger": "kundli_report",
+          "variantId": "default",
+          "variantKey": "default",
+          "variant_key": "default",
+        },
+        "paused_trigger": null,
+        "upgrade_pro": {
+          "enabled": true,
+          "placementId": "pl_upgrade",
+          "placement_id": "pl_upgrade",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-marriage-03",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-marriage-03"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-marriage-03",
+              "url": "https://api.example.test/v1/paywall-documents/pl_upgrade/marriage-03/cache-binding-marriage-03.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-marriage-03",
+            "templateId": "paywall",
+          },
+          "trigger": "upgrade_pro",
+          "variantId": "marriage-03",
+          "variantKey": "marriage-03",
+          "variant_key": "marriage-03",
+        },
+      },
+      "ttl": 60,
+      "version": "1.0.0",
+    },
+    "statsigCalls": [
+      {
+        "experiment": "hiastro_baseline",
+        "user": {
+          "custom": {
+            "intent": "career",
+            "publicKey": "pk_live_hiastro",
+          },
+          "customIDs": {
+            "stableID": "stable-anonymous",
+          },
+          "userID": "stable-anonymous",
+        },
+      },
+      {
+        "experiment": "paywall_default",
+        "user": {
+          "custom": {
+            "intent": "career",
+            "publicKey": "pk_live_hiastro",
+          },
+          "customIDs": {
+            "stableID": "stable-anonymous",
+          },
+          "userID": "stable-anonymous",
+        },
+      },
+    ],
+  },
+  {
+    "events": [
+      {
+        "events": [
+          {
+            "event": "paywall_resolved",
+            "properties": {
+              "intent": "marriage",
+              "resolved": "upgrade_pro=marriage-02, kundli_report=default",
+              "traits": "{"intent":"marriage"}",
+            },
+          },
+        ],
+        "identity": {
+          "identifiers": {},
+          "privateTraits": {},
+          "storageUserId": "user-autotune",
+          "traits": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "userId": "user-autotune",
+        },
+        "publicKey": "pk_live_hiastro",
+        "sessionId": "user-autotune",
+        "userId": "user-autotune",
+      },
+    ],
+    "logs": [
+      {
+        "identifiers": {},
+        "publicKey": "pk_live_hiastro",
+        "resolved": [
+          {
+            "assignedVariantId": "marriage-02",
+            "experimentId": "paywall_intent_marriage",
+            "trigger": "upgrade_pro",
+            "variant": "marriage-02",
+            "viaBaseline": false,
+          },
+          {
+            "assignedVariantId": "default",
+            "experimentId": null,
+            "trigger": "kundli_report",
+            "variant": "default",
+            "viaBaseline": false,
+          },
+        ],
+        "traits": {
+          "intent": "marriage",
+        },
+        "userId": "user-autotune",
+      },
+    ],
+    "name": "v2 explicit statsig mode",
+    "response": {
+      "_meta": {
+        "cache_ttl_seconds": 60,
+        "config_version": "v1",
+        "document_delivery": "hosted+inline",
+      },
+      "assets": {},
+      "placements": {
+        "kundli_report": {
+          "enabled": true,
+          "placementId": "pl_kundli",
+          "placement_id": "pl_kundli",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-default",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-default"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-default",
+              "url": "https://api.example.test/v1/paywall-documents/pl_kundli/default/cache-binding-default.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-default",
+            "templateId": "paywall",
+          },
+          "trigger": "kundli_report",
+          "variantId": "default",
+          "variantKey": "default",
+          "variant_key": "default",
+        },
+        "upgrade_pro": {
+          "enabled": true,
+          "placementId": "pl_upgrade",
+          "placement_id": "pl_upgrade",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-marriage-02",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-marriage-02"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-marriage-02",
+              "url": "https://api.example.test/v1/paywall-documents/pl_upgrade/marriage-02/cache-binding-marriage-02.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-marriage-02",
+            "templateId": "paywall",
+          },
+          "trigger": "upgrade_pro",
+          "variantId": "marriage-02",
+          "variantKey": "marriage-02",
+          "variant_key": "marriage-02",
+        },
+      },
+      "ttl": 60,
+      "version": "1.0.0",
+    },
+    "statsigCalls": [
+      {
+        "experiment": "hiastro_baseline",
+        "user": {
+          "custom": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "customIDs": {
+            "tranzmitUserID": "user-autotune",
+          },
+          "userID": "user-autotune",
+        },
+      },
+      {
+        "experiment": "paywall_intent_marriage",
+        "user": {
+          "custom": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "customIDs": {
+            "tranzmitUserID": "user-autotune",
+          },
+          "userID": "user-autotune",
+        },
+      },
+    ],
+  },
+  {
+    "events": [
+      {
+        "events": [
+          {
+            "event": "paywall_resolved",
+            "properties": {
+              "intent": "(none)",
+              "resolved": "upgrade_pro=control",
+              "traits": "",
+            },
+          },
+        ],
+        "identity": {
+          "identifiers": {},
+          "privateTraits": {},
+          "storageUserId": "user-autotune",
+          "traits": {
+            "publicKey": "pk_live_hiastro",
+          },
+          "userId": "user-autotune",
+        },
+        "publicKey": "pk_live_hiastro",
+        "sessionId": "user-autotune",
+        "userId": "user-autotune",
+      },
+    ],
+    "logs": [
+      {
+        "identifiers": {},
+        "publicKey": "pk_live_hiastro",
+        "resolved": [
+          {
+            "assignedVariantId": "control",
+            "experimentId": "unregistered_experiment",
+            "trigger": "upgrade_pro",
+            "variant": "control",
+            "viaBaseline": false,
+          },
+        ],
+        "traits": null,
+        "userId": "user-autotune",
+      },
+    ],
+    "name": "v2 unrecognized experiment",
+    "response": {
+      "_meta": {
+        "cache_ttl_seconds": 60,
+        "config_version": "v1",
+        "document_delivery": "hosted+inline",
+      },
+      "assets": {},
+      "placements": {
+        "upgrade_pro": {
+          "enabled": true,
+          "placementId": "pl_upgrade",
+          "placement_id": "pl_upgrade",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-control",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-control"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-control",
+              "url": "https://api.example.test/v1/paywall-documents/pl_upgrade/control/cache-binding-control.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-control",
+            "templateId": "paywall",
+          },
+          "trigger": "upgrade_pro",
+          "variantId": "control",
+          "variantKey": "control",
+          "variant_key": "control",
+        },
+      },
+      "ttl": 60,
+      "version": "1.0.0",
+    },
+    "statsigCalls": [
+      {
+        "experiment": "unregistered_experiment",
+        "user": {
+          "custom": {
+            "publicKey": "pk_live_hiastro",
+          },
+          "customIDs": {
+            "tranzmitUserID": "user-autotune",
+          },
+          "userID": "user-autotune",
+        },
+      },
+    ],
+  },
+  {
+    "events": [
+      {
+        "events": [
+          {
+            "event": "paywall_resolved",
+            "properties": {
+              "intent": "marriage",
+              "resolved": "upgrade_pro=control",
+              "traits": "{"intent":"marriage"}",
+            },
+          },
+        ],
+        "identity": {
+          "identifiers": {},
+          "privateTraits": {},
+          "storageUserId": "user-autotune",
+          "traits": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "userId": "user-autotune",
+        },
+        "publicKey": "pk_live_hiastro",
+        "sessionId": "user-autotune",
+        "userId": "user-autotune",
+      },
+    ],
+    "logs": [
+      {
+        "identifiers": {},
+        "publicKey": "pk_live_hiastro",
+        "resolved": [
+          {
+            "assignedVariantId": "control",
+            "experimentId": "paywall_intent_marriage",
+            "trigger": "upgrade_pro",
+            "variant": "control",
+            "viaBaseline": false,
+          },
+        ],
+        "traits": {
+          "intent": "marriage",
+        },
+        "userId": "user-autotune",
+      },
+    ],
+    "name": "v2 statsig secret missing",
+    "response": {
+      "_meta": {
+        "cache_ttl_seconds": 60,
+        "config_version": "v1",
+        "document_delivery": "hosted+inline",
+      },
+      "assets": {},
+      "placements": {
+        "upgrade_pro": {
+          "enabled": true,
+          "placementId": "pl_upgrade",
+          "placement_id": "pl_upgrade",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "cache-binding-control",
+            "checkout": {
+              "provider": {
+                "planId": "plan_yearly",
+              },
+            },
+            "cta": {
+              "text": "Continue",
+            },
+            "dismiss": {
+              "enabled": true,
+            },
+            "document": {
+              "cacheTtlSeconds": 31536000,
+              "css": "main{color:#111}",
+              "html": "<main data-binding="binding-control"><button data-tranzmit-action="cta" data-product-id="pro_yearly">Go</button></main>",
+              "integrity": "sha256-binding-control",
+              "url": "https://api.example.test/v1/paywall-documents/pl_upgrade/control/cache-binding-control.json?key=pk_live_hiastro",
+            },
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [
+              {
+                "id": "pro_yearly",
+                "name": "Pro",
+                "price": "₹999/year",
+              },
+            ],
+            "renderer": "webview",
+            "revision": "content-binding-control",
+            "templateId": "paywall",
+          },
+          "trigger": "upgrade_pro",
+          "variantId": "control",
+          "variantKey": "control",
+          "variant_key": "control",
+        },
+      },
+      "ttl": 60,
+      "version": "1.0.0",
+    },
+    "statsigCalls": [],
+  },
+  {
+    "events": [
+      {
+        "events": [
+          {
+            "event": "paywall_resolved",
+            "properties": {
+              "intent": "marriage",
+              "resolved": "onboarding=var_b",
+              "traits": "{"intent":"marriage"}",
+            },
+          },
+        ],
+        "identity": {
+          "identifiers": {
+            "stableID": "stable-legacy",
+          },
+          "privateTraits": {},
+          "storageUserId": "user-legacy",
+          "traits": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "userId": "user-legacy",
+        },
+        "publicKey": "pk_live_hiastro",
+        "sessionId": "user-legacy",
+        "userId": "user-legacy",
+      },
+    ],
+    "logs": [
+      {
+        "identifiers": {
+          "stableID": "stable-legacy",
+        },
+        "publicKey": "pk_live_hiastro",
+        "resolved": [
+          {
+            "assignedVariantId": "var_b",
+            "experimentId": "legacy_experiment",
+            "trigger": "onboarding",
+            "variant": "var_b",
+            "viaBaseline": false,
+          },
+        ],
+        "traits": {
+          "intent": "marriage",
+        },
+        "userId": "user-legacy",
+      },
+    ],
+    "name": "legacy statsig experiment",
+    "response": {
+      "_meta": {
+        "cache_ttl_seconds": 60,
+        "config_version": "v1",
+        "document_delivery": "hosted+inline",
+      },
+      "assets": {},
+      "placements": {
+        "onboarding": {
+          "enabled": true,
+          "placementId": "pl_legacy",
+          "placement_id": "pl_legacy",
+          "spec": {
+            "bridge": {
+              "allowedActions": [
+                "cta",
+                "dismiss",
+                "open_url",
+                "custom_action",
+              ],
+              "version": 1,
+            },
+            "cacheKey": "hero_vertical:doc-bec09947df77",
+            "cta": "Continue",
+            "dismiss": {
+              "delay_ms": 0,
+              "enabled": true,
+            },
+            "document": {
+              "baseUrl": "https://api.example.test",
+              "cacheTtlSeconds": 31536000,
+              "css": "html,body{margin:0;min-height:100%;background:transparent;overflow-x:hidden}body{color:#17172e;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.tranzmit-paywall{min-height:var(--tz-vh,100svh);background:#fbfaff;padding:clamp(16px,5vw,24px);padding-bottom:calc(clamp(92px,24vw,112px) + var(--tz-safe-bottom,env(safe-area-inset-bottom)));position:relative;overflow-x:hidden;overflow-y:auto}.close{position:absolute;left:clamp(10px,3vw,16px);top:clamp(10px,3vw,16px);border:0;border-radius:999px;background:#fff;color:#6f6878;width:clamp(34px,9vw,38px);height:clamp(34px,9vw,38px);font-size:clamp(22px,7vw,28px);z-index:2}.card{background:#fff;border-radius:clamp(20px,7vw,28px);box-shadow:0 24px 80px rgba(15,23,42,.16);padding:clamp(24px,7vw,34px) clamp(16px,5vw,24px);text-align:center}h1{font-size:clamp(28px,9vw,36px);line-height:1.05;margin:0 0 10px;font-weight:900;letter-spacing:-.04em;text-wrap:balance}.subtitle{color:#6f6878;font-size:clamp(14px,4vw,16px);line-height:1.45;margin:0 0 18px}ul{display:grid;gap:10px;list-style:none;margin:18px 0;padding:0;text-align:left}li{align-items:center;background:#f8f5ff;border:1px solid #ece4fb;border-radius:14px;display:flex;gap:10px;padding:clamp(10px,3vw,12px);font-weight:700;font-size:clamp(13px,3.8vw,16px);line-height:1.25}.icon{color:#6537d9;font-weight:900}.offer{border:1.5px solid #6537d9;border-radius:22px;display:grid;gap:6px;margin:18px 0;padding:clamp(14px,4.5vw,18px)}.offer strong{color:#6537d9;font-size:clamp(20px,6vw,24px);overflow-wrap:anywhere}.badge{justify-self:center;background:#e6b246;color:#fff;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:900}.cta,.secondary{width:100%;border:0;border-radius:999px;min-height:clamp(52px,13vw,56px);font-size:clamp(16px,4.5vw,17px);font-weight:900}.cta{background:#6537d9;color:#fff;position:fixed;left:calc(var(--tz-safe-left,0px) + clamp(16px,5vw,24px));right:calc(var(--tz-safe-right,0px) + clamp(16px,5vw,24px));bottom:calc(var(--tz-safe-bottom,0px) + clamp(16px,5vw,24px));z-index:3}.secondary{background:transparent;color:#6f6878;margin-top:8px}.legal{color:#6f6878;font-size:12px}.tz-presentation-fullscreen .tranzmit-paywall{width:var(--tz-vw,100vw)!important;height:var(--tz-vh,100svh)!important;min-height:var(--tz-vh,100svh)!important;max-height:var(--tz-vh,100svh)!important;margin:0!important;padding-bottom:calc(var(--tz-safe-bottom,0px) + var(--tz-cta-reserved-height,clamp(86px,10.5vh,108px)))!important;border-radius:0!important;box-shadow:none!important;overflow-y:auto!important}.tz-presentation-fullscreen .card{border-radius:0!important;box-shadow:none!important}.tz-presentation-fullscreen .close,.tz-presentation-fullscreen .tz-close{display:none!important}",
+              "html": "<main class="tranzmit-paywall">
+    <button class="close" data-tranzmit-action="dismiss" aria-label="Close">×</button>
+    <section class="card">
+      <h1>B</h1>
+      
+      
+      
+      <button class="cta" data-tranzmit-action="cta" data-product-id="product">Continue</button>
+      
+      
+    </section>
+  </main>",
+              "integrity": "sha256-9bDZMVfTms8Tra4d7fZaoJ7LmNdgGmTudBU+Vkxameo=",
+              "url": "https://api.example.test/v1/paywall-documents/pl_legacy/var_b/hero_vertical%3Adoc-bec09947df77.json?key=pk_live_hiastro",
+            },
+            "headline": "B",
+            "layout": "hero_vertical",
+            "metadata": {
+              "documentDelivery": "hosted+inline",
+            },
+            "presentation": {
+              "mode": "sheet",
+            },
+            "products": [],
+            "renderer": "webview",
+            "revision": "doc-bec09947df77",
+            "templateId": "hero_vertical",
+            "theme": "light",
+          },
+          "trigger": "onboarding",
+          "variantId": "var_b",
+          "variantKey": "var_b",
+          "variant_key": "var_b",
+        },
+      },
+      "ttl": 60,
+      "version": "1.0.0",
+    },
+    "statsigCalls": [
+      {
+        "experiment": "legacy_experiment",
+        "user": {
+          "custom": {
+            "intent": "marriage",
+            "publicKey": "pk_live_hiastro",
+          },
+          "customIDs": {
+            "stableID": "stable-legacy",
+            "tranzmitUserID": "user-legacy",
+          },
+          "userID": "user-legacy",
+        },
+      },
+    ],
+  },
+]
+`;

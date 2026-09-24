@@ -192,9 +192,13 @@ async function v2Canonical(clientId: string, db: DbExecutor) {
     default_variant_key: string;
     statsig_experiment_id: string | null;
     targeting_rules: unknown;
+    assignment_mode: string | null;
+    holdout_percent: string | number | null;
+    assignment_salt: string | null;
     variant_key: string | null;
     weight: number | null;
     fallback_rank: number | null;
+    eligibility: JsonRecord | null;
     content: JsonRecord | null;
     content_hash: string | null;
     document_hash: string | null;
@@ -207,7 +211,8 @@ async function v2Canonical(clientId: string, db: DbExecutor) {
   }>(
     `SELECT p.id AS placement_id, p.trigger, pr.status AS placement_status,
             pr.default_variant_key, pr.statsig_experiment_id, pr.targeting_rules,
-            prv.variant_key, prv.weight, prv.fallback_rank,
+            pr.assignment_mode, pr.holdout_percent, pr.assignment_salt,
+            prv.variant_key, prv.weight, prv.fallback_rank, prv.eligibility,
             cr.content, cr.content_hash, cr.document_hash,
             cr.document_cache_key, cr.document_revision, cr.document_integrity,
             cr.document_payload, r.products, r.checkout
@@ -228,16 +233,27 @@ async function v2Canonical(clientId: string, db: DbExecutor) {
     if (first.placement_status !== "active") {
       return { trigger: first.trigger, served: false };
     }
+    // Legacy routing cannot express a fixed split, so a fixed_split revision
+    // must never compare equal to legacy. Statsig-mode output is unchanged.
+    const fixedSplit = first.assignment_mode === "fixed_split";
     return {
       trigger: first.trigger,
       served: true,
       default_variant_key: first.default_variant_key,
       statsig_experiment_id: first.statsig_experiment_id,
       targeting_rules: first.targeting_rules || [],
+      ...(fixedSplit ? {
+        assignment: {
+          mode: "fixed_split",
+          holdout_percent: Number(first.holdout_percent) || 0,
+          salt: first.assignment_salt,
+        },
+      } : {}),
       variants: rows.map((row) => ({
         variant_key: row.variant_key,
         weight: row.weight,
         fallback_rank: row.fallback_rank,
+        ...(fixedSplit ? { eligibility: row.eligibility ?? null } : {}),
         spec: v2SpecSummary(row),
       })).sort((left, right) => String(left.variant_key).localeCompare(String(right.variant_key))),
     };

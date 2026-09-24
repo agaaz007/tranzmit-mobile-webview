@@ -24,6 +24,14 @@ vi.mock("../src/db.js", () => ({
 
 vi.mock("../src/statsig.js", () => ({
   getVariantAssignment: mocks.getVariantAssignment,
+  // The resolver asks for evaluation details (for the assignment stamp); the
+  // arm it serves still comes from the getVariantAssignment mock.
+  getVariantAssignmentDetailed: vi.fn(async (...args: unknown[]) => ({
+    variantId: await mocks.getVariantAssignment(...args),
+    status: "assigned",
+    rawVariantId: null,
+    details: null,
+  })),
   getBaselineDecision: mocks.getBaselineDecision,
 }));
 

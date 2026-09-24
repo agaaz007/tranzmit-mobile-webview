@@ -31,7 +31,7 @@ export async function handleAdminV2(
   try {
     const actor = auth.kind === "workspace"
       ? `workspace:${auth.workspaceId}`
-      : auth.source || "admin";
+      : delegatedActor(req, auth.source || "admin");
     const workspaceId = auth.kind === "workspace" ? auth.workspaceId : undefined;
 
     if (path === "/admin/v2/environments" && req.method === "GET") {
@@ -170,6 +170,9 @@ export async function handleAdminV2(
         defaultVariantKey: body.defaultVariantKey || body.default_variant_key,
         statsigExperimentId: body.statsigExperimentId ?? body.statsig_experiment_id,
         targetingRules: body.targetingRules ?? body.targeting_rules,
+        assignmentMode: body.assignmentMode ?? body.assignment_mode,
+        holdoutPercent: body.holdoutPercent ?? body.holdout_percent,
+        assignmentSalt: body.assignmentSalt ?? body.assignment_salt,
         variants: normalizeVariants(body.variants),
         createdBy: actor,
       }, workspaceId));
@@ -221,6 +224,39 @@ export async function handleAdminV2(
   return false;
 }
 
+// Tranzmit's launch executor writes with the shared admin secret, which on its own would be
+// audited as `admin_secret_bearer`. It names the approving person in X-Tranzmit-Actor
+// (base64url JSON {id,label,kind,role?}) and the launch package in X-Tranzmit-Launch-Package;
+// both are folded into the audited actor. Only honoured for the admin credential.
+const ACTOR_FIELD = /^[\p{L}\p{N} ._@:()'#+-]{1,120}$/u;
+
+export function delegatedActor(req: IncomingMessage, base: string): string {
+  const rawActor = singleHeaderValue(req.headers["x-tranzmit-actor"]);
+  const rawPackage = singleHeaderValue(req.headers["x-tranzmit-launch-package"]);
+  if (!rawActor && !rawPackage) return base;
+  let parts = [base];
+  if (rawActor) {
+    let parsed: any;
+    try { parsed = JSON.parse(Buffer.from(rawActor, "base64url").toString("utf8")); } catch { parsed = null; }
+    const fields = parsed && typeof parsed === "object" ? [parsed.kind, parsed.id, parsed.label] : [];
+    if (fields.length !== 3 || !fields.every((field) => typeof field === "string" && ACTOR_FIELD.test(field))) {
+      throw new ConfigError("Invalid X-Tranzmit-Actor header", 400);
+    }
+    const role = typeof parsed.role === "string" && ACTOR_FIELD.test(parsed.role) ? ` role=${parsed.role}` : "";
+    parts.push(`for ${parsed.kind}:${parsed.id} (${parsed.label})${role}`);
+  }
+  if (rawPackage) {
+    if (!/^[A-Za-z0-9._:@#-]{1,200}$/.test(rawPackage)) throw new ConfigError("Invalid X-Tranzmit-Launch-Package header", 400);
+    parts.push(`launch_package=${rawPackage}`);
+  }
+  return parts.join(" ");
+}
+
+function singleHeaderValue(value: string | string[] | undefined): string | null {
+  const text = Array.isArray(value) ? value[0] : value;
+  return typeof text === "string" && text.trim() ? text.trim() : null;
+}
+
 function normalizeVariants(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.map((variant: any) => ({
@@ -229,6 +265,7 @@ function normalizeVariants(value: unknown) {
     status: variant.status,
     weight: variant.weight,
     fallbackRank: variant.fallbackRank ?? variant.fallback_rank,
+    eligibility: variant.eligibility,
   }));
 }
 

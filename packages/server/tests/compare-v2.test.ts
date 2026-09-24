@@ -134,11 +134,38 @@ describe("V2 legacy parity product comparison", () => {
       /UPDATE clients SET config_source/.test(String(sql))
     ))).toBe(false);
   });
+
+  it("keeps the V2 hash unchanged for statsig-mode routing with the new default columns", async () => {
+    const before = await compareProducts([completeProduct], [completeProduct]);
+    const after = await compareProducts([completeProduct], [completeProduct], {
+      assignment_mode: "statsig",
+      holdout_percent: "0.00",
+      assignment_salt: null,
+      eligibility: null,
+    });
+    expect(after.passed).toBe(true);
+    expect(after.v2_hash).toBe(before.v2_hash);
+  });
+
+  it("never reports a fixed_split revision as equal to legacy routing", async () => {
+    const comparison = await compareProducts([completeProduct], [completeProduct], {
+      assignment_mode: "fixed_split",
+      holdout_percent: "10.00",
+      assignment_salt: null,
+      eligibility: null,
+    });
+    expect(comparison.passed).toBe(false);
+    expect(comparison.legacy_hash).not.toBe(comparison.v2_hash);
+  });
 });
 
-async function compareProducts(legacyProducts: JsonRecord[], v2Products: JsonRecord[]) {
+async function compareProducts(
+  legacyProducts: JsonRecord[],
+  v2Products: JsonRecord[],
+  v2RoutingColumns: JsonRecord = {}
+) {
   process.env.PUBLIC_API_BASE_URL = API_BASE_URL;
-  const db = comparisonDatabase(legacyProducts, v2Products);
+  const db = comparisonDatabase(legacyProducts, v2Products, false, v2RoutingColumns);
 
   const { compareLegacyAndV2Client } = await import("../src/compare-v2.js");
   const comparison = await compareLegacyAndV2Client("client-live", db);
@@ -149,7 +176,8 @@ async function compareProducts(legacyProducts: JsonRecord[], v2Products: JsonRec
 function comparisonDatabase(
   legacyProducts: JsonRecord[],
   v2Products: JsonRecord[],
-  includeCutoverQueries = false
+  includeCutoverQueries = false,
+  v2RoutingColumns: JsonRecord = {}
 ): DbExecutor {
   process.env.PUBLIC_API_BASE_URL = API_BASE_URL;
   const checkout = { provider: { planId: "plan_yearly" } };
@@ -246,6 +274,7 @@ function comparisonDatabase(
           document_payload: documentPayload,
           products: structuredClone(v2Products),
           checkout,
+          ...v2RoutingColumns,
         }]);
       }
       throw new Error(`Unexpected query: ${sql}`);

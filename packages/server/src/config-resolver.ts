@@ -8,7 +8,16 @@ import {
   type PublishedPlacementRouting,
 } from "./config-store.js";
 import type { ResolvedIdentity } from "./identity.js";
-import { getBaselineDecision, getVariantAssignment } from "./statsig.js";
+import { getBaselineDecision, getVariantAssignmentDetailed } from "./statsig.js";
+import {
+  assignFixedSplit,
+  assignmentUnit,
+  buildStatsigStamp,
+  matchesTraits,
+  reconcileServedVariant,
+  type AssignmentStamp,
+  type StatsigResolution,
+} from "./assignment.js";
 import {
   attachImmutableWebViewDocument,
   ensureWebViewSpec,
@@ -35,6 +44,11 @@ export interface ResolutionTrace {
 export interface ResolvedPlacements {
   placements: ConfigResponse["placements"];
   traces: ResolutionTrace[];
+  /**
+   * The assignment stamp for each trace, index-aligned with `traces`. null only
+   * when building the stamp failed; serving never depends on it.
+   */
+  assignments: Array<AssignmentStamp | null>;
   source: "legacy" | "v2";
 }
 
@@ -64,12 +78,49 @@ async function resolveV2(
     variantKey: string;
     bindingId: string;
     trace: ResolutionTrace;
+    stamp: AssignmentStamp | null;
   }> = [];
   const placements: ConfigResponse["placements"] = {};
+  const { unit, unitType } = assignmentUnit(input.identity);
 
   for (const row of routing) {
     if (row.status !== "active") {
       placements[row.trigger] = null;
+      continue;
+    }
+    if (row.assignmentMode === "fixed_split") {
+      // Native fixed split: Statsig (baseline and experiment) is never
+      // consulted for this placement.
+      const stamp = assignFixedSplit({
+        placementId: row.placementId,
+        revisionId: row.revisionId,
+        trigger: row.trigger,
+        salt: row.assignmentSalt ?? null,
+        holdoutPercent: row.holdoutPercent ?? 0,
+        defaultVariantKey: row.defaultVariantKey,
+        variants: (row.variants || []).map((variant) => ({
+          variantKey: variant.variantId,
+          weight: variant.weight,
+          eligibility: variant.eligibility ?? null,
+        })),
+        traits: input.identity.traits,
+        unit,
+        unitType,
+      });
+      const selected = selectV2Variant(row, stamp.chosen);
+      selections.push({
+        row,
+        variantKey: selected.variantKey,
+        bindingId: selected.bindingId,
+        trace: {
+          trigger: row.trigger,
+          experimentId: null,
+          viaBaseline: false,
+          assignedVariantId: stamp.chosen,
+          variant: selected.variantKey,
+        },
+        stamp: reconcileServedVariant(stamp, selected.variantKey),
+      });
       continue;
     }
     const decision = await assignVariant({
@@ -92,6 +143,16 @@ async function resolveV2(
         assignedVariantId: decision.assignedVariantId,
         variant: selected.variantKey,
       },
+      stamp: safeStamp(row.trigger, () => reconcileServedVariant(buildStatsigStamp({
+        placementId: row.placementId,
+        revisionId: row.revisionId,
+        trigger: row.trigger,
+        defaultVariantKey: row.defaultVariantKey,
+        variantKeys: (row.variants || []).map((variant) => variant.variantId),
+        resolution: decision,
+        unit,
+        unitType,
+      }), selected.variantKey)),
     });
   }
 
@@ -100,9 +161,11 @@ async function resolveV2(
     Array.from(new Set(selections.map((selection) => selection.bindingId)))
   );
   const traces: ResolutionTrace[] = [];
+  const assignments: Array<AssignmentStamp | null> = [];
   for (const selection of selections) {
     const release = releases.get(selection.bindingId);
     traces.push(selection.trace);
+    assignments.push(selection.stamp ? { ...selection.stamp, served: Boolean(release) } : null);
     if (!release) {
       placements[selection.row.trigger] = null;
       continue;
@@ -127,7 +190,7 @@ async function resolveV2(
       spec
     );
   }
-  return { placements, traces, source: "v2" };
+  return { placements, traces, assignments, source: "v2" };
 }
 
 async function resolveLegacy(input: {
@@ -139,6 +202,8 @@ async function resolveLegacy(input: {
   const rows = await getPlacementsForKey(input.publicKey);
   const placements: ConfigResponse["placements"] = {};
   const traces: ResolutionTrace[] = [];
+  const assignments: Array<AssignmentStamp | null> = [];
+  const { unit, unitType } = assignmentUnit(input.identity);
 
   for (const row of rows) {
     const defaultVariant = row.default_variant_id || "var_default";
@@ -164,6 +229,16 @@ async function resolveLegacy(input: {
       assignedVariantId: decision.assignedVariantId,
       variant: variantKey,
     });
+    assignments.push(safeStamp(row.trigger, () => reconcileServedVariant(buildStatsigStamp({
+      placementId: row.id,
+      revisionId: null,
+      trigger: row.trigger,
+      defaultVariantKey: defaultVariant,
+      variantKeys: (row.variants || []).map((variant) => variant.variant_id),
+      resolution: decision,
+      unit,
+      unitType,
+    }), variantKey)));
     const selectedSpec = ensureWebViewSpec(selected.spec ?? row.spec, {
       publicKey: input.publicKey,
       placementId: row.id,
@@ -174,7 +249,16 @@ async function resolveLegacy(input: {
     });
     placements[row.trigger] = placementConfig(row.trigger, row.id, variantKey, selectedSpec);
   }
-  return { placements, traces, source: "legacy" };
+  return { placements, traces, assignments, source: "legacy" };
+}
+
+function safeStamp(trigger: string, build: () => AssignmentStamp): AssignmentStamp | null {
+  try {
+    return build();
+  } catch (error) {
+    console.warn(`[tz.assignment] stamp for ${trigger} failed:`, error);
+    return null;
+  }
 }
 
 async function assignVariant(input: {
@@ -184,10 +268,12 @@ async function assignVariant(input: {
   identity: ResolvedIdentity;
   projectName: string | null;
   serverSecretEnvVar: string | null;
-}): Promise<{ assignedVariantId: string; viaBaseline: boolean; experimentId: string | null }> {
+}): Promise<StatsigResolution> {
   let assignedVariantId = input.defaultVariant;
   let viaBaseline = false;
   let experimentId: string | null = null;
+  let baseline: StatsigResolution["baseline"] = null;
+  let experiment: StatsigResolution["experiment"] = null;
   const projectConfig = {
     projectName: input.projectName,
     serverSecretEnvVar: input.serverSecretEnvVar,
@@ -196,6 +282,9 @@ async function assignVariant(input: {
   let baselineHandled = false;
   if (baselineRule?.statsig_experiment_id) {
     const decision = await getBaselineDecision(input.identity, baselineRule.statsig_experiment_id, projectConfig);
+    baseline = decision
+      ? { useAutotune: decision.useAutotune, variantId: decision.variantId, details: decision.details ?? null }
+      : null;
     if (decision && !decision.useAutotune) {
       assignedVariantId = decision.variantId || input.defaultVariant;
       baselineHandled = true;
@@ -205,15 +294,24 @@ async function assignVariant(input: {
   if (!baselineHandled) {
     experimentId = resolveExperimentId(input.targetingRules, input.identity.traits, input.experimentId);
     if (experimentId) {
-      assignedVariantId = await getVariantAssignment(
+      const result = await getVariantAssignmentDetailed(
         input.identity,
         experimentId,
         input.defaultVariant,
         projectConfig
       );
+      assignedVariantId = result.variantId;
+      experiment = { status: result.status, rawVariantId: result.rawVariantId, details: result.details };
     }
   }
-  return { assignedVariantId, viaBaseline, experimentId };
+  return {
+    assignedVariantId,
+    viaBaseline,
+    experimentId,
+    baselineExperimentId: baselineRule?.statsig_experiment_id ?? null,
+    baseline,
+    experiment,
+  };
 }
 
 function selectV2Variant(row: PublishedPlacementRouting, assignedVariantId: string) {
@@ -278,24 +376,6 @@ function findBaselineRule(targetingRules: unknown): { statsig_experiment_id: str
 function normalizeTargetingRules(value: unknown): TargetingRule[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is TargetingRule => Boolean(item) && typeof item === "object" && !Array.isArray(item));
-}
-
-function matchesTraits(when: TargetingRule["when"], traits: Record<string, unknown>): boolean {
-  if (!when || typeof when !== "object" || Array.isArray(when)) return false;
-  const entries = Object.entries(when);
-  if (entries.length === 0) return false;
-  return entries.every(([key, expected]) => traitMatches(traits[key], expected));
-}
-
-function traitMatches(actual: unknown, expected: unknown): boolean {
-  if (Array.isArray(expected)) return expected.some((item) => traitMatches(actual, item));
-  if (Array.isArray(actual)) return actual.some((item) => traitMatches(item, expected));
-  if (!isComparableTrait(actual) || !isComparableTrait(expected)) return false;
-  return actual === expected;
-}
-
-function isComparableTrait(value: unknown): value is string | number | boolean {
-  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 }
 
 function normalizeExperimentId(value: unknown): string | null {

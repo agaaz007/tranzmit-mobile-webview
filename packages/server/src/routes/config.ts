@@ -5,6 +5,7 @@ import { sendJsonCompressed } from "../http-compress.js";
 import { readBody } from "../middleware/body-parser.js";
 import { resolveConfigIdentity } from "../identity.js";
 import { resolveConfigPlacements } from "../config-resolver.js";
+import { assignmentEventProperties, assignmentStampEnabled } from "../assignment.js";
 import { configTtlSeconds, publicApiBaseUrl, shouldInlineDocuments } from "../webview-documents.js";
 
 export async function handleConfig(
@@ -61,7 +62,9 @@ export async function handleConfig(
   // Also record the resolution as a `paywall_resolved` event so it shows in the
   // Events dashboard with the intent the SDK passed and the variant each
   // placement resolved to. Fire-and-forget so it never adds latency or breaks the
-  // config response.
+  // config response. `assignment` / `other_assignments` carry how each variant
+  // was chosen and with what probability (see docs/assignment-stamp.md);
+  // `intent`, `resolved` and `traits` are unchanged because analyses parse them.
   const intentValue =
     request.traits && typeof request.traits === "object"
       ? (request.traits as Record<string, unknown>).intent
@@ -80,6 +83,7 @@ export async function handleConfig(
             .map((r) => `${r.trigger}=${r.variant}${r.viaBaseline ? " (baseline)" : ""}`)
             .join(", "),
           traits: request.traits ? JSON.stringify(request.traits) : "",
+          ...(assignmentStampEnabled(publicKey) ? assignmentEventProperties(resolution.assignments) : {}),
         },
       },
     ],

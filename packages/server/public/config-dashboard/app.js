@@ -13,6 +13,7 @@
     selectedPlacementId: null,
     placementHistory: null,
     selectedRevisionId: null,
+    selectedAssignment: null,
     dialogAction: null,
   };
 
@@ -741,16 +742,30 @@
     el.defaultVariantKey.value = revision.default_variant_key || "";
     el.statsigExperimentId.value = revision.statsig_experiment_id || "";
     el.targetingRulesJson.value = pretty(revision.targeting_rules || []);
+    // Fixed-split settings have no dedicated controls; carry them forward so
+    // saving an edit never silently switches a placement back to Statsig.
+    state.selectedAssignment = assignmentSettings(revision);
     el.variantsJson.value = pretty((revision.variants || []).map(function (variant) {
-      return {
+      var editable = {
         variantKey: variant.variant_key || variant.variantKey,
         bindingId: variant.binding_id || variant.bindingId,
         status: variant.status || "active",
         weight: Number(variant.weight) || 0,
         fallbackRank: Number(variant.fallback_rank == null ? variant.fallbackRank : variant.fallback_rank) || 0,
       };
+      if (variant.eligibility) editable.eligibility = variant.eligibility;
+      return editable;
     }));
     renderPlacementHistory();
+  }
+
+  function assignmentSettings(revision) {
+    if ((revision && revision.assignment_mode) !== "fixed_split") return null;
+    return {
+      assignmentMode: "fixed_split",
+      holdoutPercent: Number(revision.holdout_percent) || 0,
+      assignmentSalt: revision.assignment_salt || null,
+    };
   }
 
   function clearPlacementEditor() {
@@ -760,6 +775,7 @@
     el.statsigExperimentId.value = "";
     el.targetingRulesJson.value = "[]";
     el.variantsJson.value = "[]";
+    state.selectedAssignment = null;
   }
 
   function composeRoutingCandidate() {
@@ -767,7 +783,7 @@
     var variants = parseJsonField(el.variantsJson, "Variants JSON", []);
     if (!Array.isArray(targetingRules)) throw new Error("Targeting rules JSON must be an array.");
     if (!Array.isArray(variants)) throw new Error("Variants JSON must be an array.");
-    return {
+    var candidate = {
       status: el.routingStatus.value,
       defaultBindingId: el.defaultBinding.value,
       defaultVariantKey: el.defaultVariantKey.value.trim(),
@@ -775,6 +791,8 @@
       targetingRules: targetingRules,
       variants: variants,
     };
+    if (state.selectedAssignment) Object.assign(candidate, state.selectedAssignment);
+    return candidate;
   }
 
   async function savePlacementCandidate() {

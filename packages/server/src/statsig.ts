@@ -1,5 +1,5 @@
 import { StatsigServer } from "statsig-node";
-import type { StatsigUser } from "statsig-node";
+import type { DynamicConfig, StatsigUser } from "statsig-node";
 import { query } from "./db.js";
 import type { ResolvedIdentity } from "./identity.js";
 
@@ -30,21 +30,83 @@ export async function initStatsig(): Promise<void> {
   });
 }
 
+/**
+ * What the Statsig SDK reports about one evaluation. Every field is read from
+ * the SDK's evaluation result; nothing here is inferred. Statsig does not
+ * expose the allocation probabilities behind an evaluation, so none are
+ * reported.
+ */
+export interface StatsigEvaluationDetails {
+  ruleId: string | null;
+  groupName: string | null;
+  /** EvaluationReason, e.g. "Network", "Unrecognized", "Uninitialized". */
+  reason: string | null;
+  /** Timestamp of the Statsig config specs used; changes whenever Statsig config changes. */
+  configSyncTime: number | null;
+}
+
+export type VariantAssignmentStatus =
+  /** The experiment returned a non-empty `variant_id`. */
+  | "assigned"
+  /** The experiment evaluated but returned no usable `variant_id` (not allocated, unrecognized, ...). */
+  | "no_variant"
+  /** No Statsig server for this project (secret missing, invalid, or init failed). */
+  | "unavailable"
+  /** The SDK threw during evaluation. */
+  | "error";
+
+export interface VariantAssignmentResult {
+  /** Exactly what getVariantAssignment() returns. */
+  variantId: string;
+  status: VariantAssignmentStatus;
+  /** The raw `variant_id` parameter Statsig returned, before any defaulting. */
+  rawVariantId: string | null;
+  details: StatsigEvaluationDetails | null;
+}
+
 export async function getVariantAssignment(
   identity: ResolvedIdentity,
   experimentId: string,
   defaultVariant: string,
   projectConfig?: StatsigProjectConfig
 ): Promise<string> {
-  const server = await getStatsigServer(projectConfig);
-  if (!server) return defaultVariant;
+  return (await getVariantAssignmentDetailed(identity, experimentId, defaultVariant, projectConfig)).variantId;
+}
 
-  try {
-    const experiment = server.getExperimentSync(mapIdentityToStatsigUser(identity), experimentId);
-    return (experiment.get("variant_id", defaultVariant) as string) || defaultVariant;
-  } catch {
-    return defaultVariant;
+/**
+ * Same Statsig evaluation and the same returned variant as
+ * getVariantAssignment(), plus what the SDK reports about the evaluation so the
+ * assignment can be stamped onto `paywall_resolved`. One getExperimentSync call,
+ * so Statsig exposure logging is unchanged.
+ */
+export async function getVariantAssignmentDetailed(
+  identity: ResolvedIdentity,
+  experimentId: string,
+  defaultVariant: string,
+  projectConfig?: StatsigProjectConfig
+): Promise<VariantAssignmentResult> {
+  const server = await getStatsigServer(projectConfig);
+  if (!server) {
+    return { variantId: defaultVariant, status: "unavailable", rawVariantId: null, details: null };
   }
+
+  let experiment: DynamicConfig;
+  let variantId: string;
+  try {
+    experiment = server.getExperimentSync(mapIdentityToStatsigUser(identity), experimentId);
+    variantId = (experiment.get("variant_id", defaultVariant) as string) || defaultVariant;
+  } catch {
+    return { variantId: defaultVariant, status: "error", rawVariantId: null, details: null };
+  }
+  // Reading metadata must never change the served variant, so it runs after
+  // the variant is fixed and cannot throw into the path above.
+  const rawVariantId = readStringParam(experiment, "variant_id");
+  return {
+    variantId,
+    status: rawVariantId ? "assigned" : "no_variant",
+    rawVariantId,
+    details: readEvaluationDetails(experiment),
+  };
 }
 
 /**
@@ -61,6 +123,8 @@ export interface BaselineDecision {
   useAutotune: boolean;
   /** The control variant id to serve when autotune is false. */
   variantId: string | null;
+  /** SDK evaluation metadata for the baseline experiment, when available. */
+  details?: StatsigEvaluationDetails | null;
 }
 
 export async function getBaselineDecision(
@@ -80,7 +144,7 @@ export async function getBaselineDecision(
     const rawVariantId = experiment.get("variant_id", null as unknown);
     const variantId =
       typeof rawVariantId === "string" && rawVariantId.trim() ? rawVariantId.trim() : null;
-    return { useAutotune, variantId };
+    return { useAutotune, variantId, details: readEvaluationDetails(experiment) };
   } catch (err) {
     console.warn(`[Tranzmit] Baseline experiment "${experimentId}" lookup failed:`, err);
     return null;
@@ -293,6 +357,30 @@ function normalizeStatsigValues(input: Record<string, unknown>): NonNullable<Sta
     }
   }
   return out;
+}
+
+function readStringParam(experiment: DynamicConfig, key: string): string | null {
+  try {
+    const value = experiment.value?.[key];
+    return typeof value === "string" && value ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function readEvaluationDetails(experiment: DynamicConfig): StatsigEvaluationDetails | null {
+  try {
+    const evaluation = experiment.getEvaluationDetails?.() ?? null;
+    const configSyncTime = Number(evaluation?.configSyncTime);
+    return {
+      ruleId: experiment.getRuleID?.() || null,
+      groupName: experiment.getGroupName?.() || null,
+      reason: evaluation?.reason ? String(evaluation.reason) : null,
+      configSyncTime: Number.isFinite(configSyncTime) && configSyncTime > 0 ? configSyncTime : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function stringTrait(value: unknown): string | undefined {

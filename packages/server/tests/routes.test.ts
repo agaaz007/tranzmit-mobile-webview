@@ -52,13 +52,24 @@ vi.mock("../src/db.js", () => ({
   insertEvents: vi.fn(async () => {}),
 }));
 
-vi.mock("../src/statsig.js", () => ({
-  initStatsig: vi.fn(async () => {}),
-  getVariantAssignment: vi.fn(async (_user: unknown, _exp: string, def: string) => def),
-  getBaselineDecision: vi.fn(async () => null),
-  logStatsigEvents: vi.fn(() => {}),
-  isInitialized: vi.fn(() => false),
-}));
+vi.mock("../src/statsig.js", () => {
+  const getVariantAssignment = vi.fn(async (_user: unknown, _exp: string, def: string) => def);
+  return {
+    initStatsig: vi.fn(async () => {}),
+    getVariantAssignment,
+    // The resolver asks for evaluation details (for the assignment stamp); the
+    // arm it serves still comes from the getVariantAssignment mock above.
+    getVariantAssignmentDetailed: vi.fn(async (user: unknown, exp: string, def: string, project?: unknown) => ({
+      variantId: await getVariantAssignment(user, exp, def, project as never),
+      status: "assigned",
+      rawVariantId: null,
+      details: null,
+    })),
+    getBaselineDecision: vi.fn(async () => null),
+    logStatsigEvents: vi.fn(() => {}),
+    isInitialized: vi.fn(() => false),
+  };
+});
 
 beforeEach(() => {
   process.env.PUBLIC_API_BASE_URL = "https://api.example.test";

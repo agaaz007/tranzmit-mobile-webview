@@ -11,13 +11,18 @@ Cross-platform monetization SDK for Superwall-style, server-driven mobile WebVie
 > `control` variant for six days** — with **zero errors logged anywhere**.
 >
 > Why it's this dangerous:
-> 1. **Variant selection is 100% Statsig-driven.** The `weight` columns on
->    `placement_variants` are dead — if `placements.statsig_experiment_id` is
->    NULL, every user gets the default variant. No experiment link = no A/B
->    test, silently.
+> 1. **Variant selection is 100% Statsig-driven** unless a V2 placement
+>    revision opts into `assignment_mode = 'fixed_split'`
+>    ([docs/assignment-stamp.md](docs/assignment-stamp.md)). Otherwise the
+>    `weight` columns on `placement_variants` / `placement_revision_variants`
+>    are dead — if the placement has no Statsig experiment, every user gets the
+>    default variant. No experiment link = no A/B test, silently.
 > 2. **Assignment failures are swallowed.** `getVariantAssignment()` catches
 >    all errors and returns the default. A wiped link, wrong experiment name,
 >    or wrong Statsig secret all look identical: "everyone gets control."
+>    The `assignment` stamp on `paywall_resolved` now shows which one it was
+>    (`fallback_reason: statsig_*`, or `allocator: static_default` when the
+>    experiment link is gone).
 > 3. **`push-influish-production.mjs` re-points EVERY variant** to whatever
 >    seed.mjs currently exports, overwriting any hotfix specs pushed since.
 >
@@ -505,6 +510,8 @@ For Statsig Autotune or contextual bandits:
 2. Keep identities stable while you test repeated visits; bandits can change allocation over time.
 3. For contextual bandits, pass the full context in `userTraits` before fetching config.
 4. Monitor the bandit in Statsig and use a linked holdback experiment if you want a clean baseline against the non-bandit experience.
+
+Every `/v1/config` resolution logs a `paywall_resolved` event whose `assignment` block records how each placement chose its variant and with what probability. Statsig Autotune decisions are stamped as adaptive with unknown probabilities, so they cannot support unbiased readouts; for a trustworthy readout, publish the placement as a native fixed split with exact, logged probabilities. See [docs/assignment-stamp.md](docs/assignment-stamp.md).
 
 Relevant Statsig docs:
 

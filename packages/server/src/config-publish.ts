@@ -17,6 +17,7 @@ import {
   sha256Integrity,
 } from "./webview-documents.js";
 import { compareLegacyAndV2Client } from "./compare-v2.js";
+import { normalizeAssignmentSettings, type AssignmentSettings } from "./assignment.js";
 
 type JsonRecord = Record<string, any>;
 
@@ -54,12 +55,20 @@ export interface PlacementRevisionInput {
   defaultVariantKey: string;
   statsigExperimentId?: string | null;
   targetingRules?: unknown;
+  /** "statsig" (default) or "fixed_split". See docs/assignment-stamp.md. */
+  assignmentMode?: unknown;
+  /** fixed_split only: 0-50, at most two decimals. */
+  holdoutPercent?: unknown;
+  /** fixed_split only: hash salt; omit to keep assignments stable across revisions. */
+  assignmentSalt?: unknown;
   variants: Array<{
     variantKey: string;
     bindingId: string;
     status?: "active" | "paused";
     weight?: number;
     fallbackRank?: number;
+    /** fixed_split only: trait conditions, e.g. { intent: ["marriage"] }. */
+    eligibility?: unknown;
   }>;
   createdBy?: string;
 }
@@ -472,6 +481,7 @@ export async function createPlacementRevision(
     const placement = await getPlacementForUpdate(db, placementId, workspaceId);
     assertEditable(placement);
     validatePlacementInput(input);
+    const assignment = validateAssignmentInput(input);
 
     const bindingIds = Array.from(new Set([
       input.defaultBindingId,
@@ -494,11 +504,13 @@ export async function createPlacementRevision(
       `INSERT INTO placement_revisions (
          placement_id, client_id, project_key, revision_number, status,
          default_binding_id, default_variant_key, statsig_experiment_id,
-         targeting_rules, created_by
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         targeting_rules, created_by, assignment_mode, holdout_percent,
+         assignment_salt
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING id, placement_id, revision_number, status, default_binding_id,
                  default_variant_key, statsig_experiment_id, targeting_rules,
-                 created_by, created_at`,
+                 created_by, created_at, assignment_mode, holdout_percent,
+                 assignment_salt`,
       [
         placement.id,
         placement.client_id,
@@ -510,15 +522,19 @@ export async function createPlacementRevision(
         normalizeText(input.statsigExperimentId),
         JSON.stringify(Array.isArray(input.targetingRules) ? input.targetingRules : []),
         normalizeText(input.createdBy) || "api",
+        assignment.mode,
+        assignment.holdoutPercent,
+        assignment.salt,
       ]
     );
     const revisionId = String(revision.rows[0].id);
-    for (const variant of input.variants) {
+    for (const [index, variant] of input.variants.entries()) {
+      const eligibility = assignment.eligibility[index];
       await db.query(
         `INSERT INTO placement_revision_variants (
            placement_revision_id, placement_id, client_id, project_key,
-           variant_key, binding_id, status, weight, fallback_rank
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+           variant_key, binding_id, status, weight, fallback_rank, eligibility
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
         [
           revisionId,
           placement.id,
@@ -529,6 +545,7 @@ export async function createPlacementRevision(
           variant.status || "active",
           normalizeWeight(variant.weight),
           normalizeRank(variant.fallbackRank),
+          eligibility ? JSON.stringify(eligibility) : null,
         ]
       );
     }
@@ -620,7 +637,8 @@ export async function getPlacementRevisionDiff(
               'binding_id', prv.binding_id,
               'status', prv.status,
               'weight', prv.weight,
-              'fallback_rank', prv.fallback_rank
+              'fallback_rank', prv.fallback_rank,
+              'eligibility', prv.eligibility
             ) ORDER BY prv.fallback_rank, prv.variant_key)
             FILTER (WHERE prv.id IS NOT NULL), '[]'::json) AS variants
        FROM placement_revisions pr
@@ -652,7 +670,8 @@ export async function listPlacementRevisions(
               'binding_id', prv.binding_id,
               'status', prv.status,
               'weight', prv.weight,
-              'fallback_rank', prv.fallback_rank
+              'fallback_rank', prv.fallback_rank,
+              'eligibility', prv.eligibility
             ) ORDER BY prv.fallback_rank, prv.variant_key)
             FILTER (WHERE prv.id IS NOT NULL), '[]'::json) AS variants,
             pr.id = $2 AS is_current
@@ -1161,6 +1180,7 @@ async function assertPlacementRevisionReady(
   if (row.default_variant_status !== "active" || row.default_variant_binding_id !== row.default_binding_id) {
     throw new ConfigError("Published routing has an invalid default variant binding", 422);
   }
+  await assertFixedSplitReady(db, revisionId);
 
   const releases = await db.query<{
     binding_id: string;
@@ -1194,6 +1214,37 @@ async function assertPlacementRevisionReady(
       });
     }
     validatePublishableSpec(composePaywallSpec(release.content, release.products, release.checkout));
+  }
+}
+
+/**
+ * Publish-time guard for fixed_split revisions, including ones written outside
+ * the admin API: the split needs a positive-weight active arm, and the default
+ * variant (the holdout and fallback target) must be servable to every unit.
+ */
+async function assertFixedSplitReady(db: DbExecutor, revisionId: string): Promise<void> {
+  const result = await db.query<{
+    assignment_mode: string;
+    positive_active: string | number;
+    restricted_default: boolean;
+  }>(
+    `SELECT pr.assignment_mode,
+            COUNT(*) FILTER (WHERE prv.status = 'active' AND prv.weight > 0) AS positive_active,
+            COALESCE(BOOL_OR(prv.variant_key = pr.default_variant_key AND prv.eligibility IS NOT NULL), false)
+              AS restricted_default
+       FROM placement_revisions pr
+       LEFT JOIN placement_revision_variants prv ON prv.placement_revision_id = pr.id
+      WHERE pr.id = $1
+      GROUP BY pr.id`,
+    [revisionId]
+  );
+  const row = result.rows[0];
+  if (!row || row.assignment_mode !== "fixed_split") return;
+  if (Number(row.positive_active) === 0) {
+    throw new ConfigError("fixed_split routing needs at least one active variant with weight > 0", 422);
+  }
+  if (row.restricted_default) {
+    throw new ConfigError("fixed_split routing cannot restrict the default variant's eligibility", 422);
   }
 }
 
@@ -1246,6 +1297,25 @@ async function insertAudit(db: DbExecutor, input: {
       JSON.stringify(input.metadata || {}),
     ]
   );
+}
+
+function validateAssignmentInput(input: PlacementRevisionInput): AssignmentSettings {
+  const result = normalizeAssignmentSettings({
+    assignmentMode: input.assignmentMode,
+    holdoutPercent: input.holdoutPercent,
+    assignmentSalt: input.assignmentSalt,
+    statsigExperimentId: input.statsigExperimentId,
+    targetingRules: input.targetingRules,
+    defaultVariantKey: normalizeKey(input.defaultVariantKey),
+    variants: input.variants.map((variant) => ({
+      variantKey: normalizeKey(variant.variantKey),
+      status: variant.status,
+      weight: variant.weight,
+      eligibility: variant.eligibility,
+    })),
+  });
+  if (!result.ok) throw new ConfigError("Invalid assignment settings", 422, { errors: result.errors });
+  return result.value;
 }
 
 function validatePlacementInput(input: PlacementRevisionInput) {
